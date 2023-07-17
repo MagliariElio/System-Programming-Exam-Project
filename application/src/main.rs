@@ -1,5 +1,12 @@
-use druid::widget::{Flex};
-use druid::{AppLauncher, Command, Data, Env, FileDialogOptions, LocalizedString, Menu, MenuItem, Widget, WindowDesc, WindowId};
+use druid::widget::{Flex, Label};
+use druid::{AppLauncher, Command, Data, Env, FileDialogOptions, FileInfo, FileSpec, ImageBuf, Lens, LocalizedString, Menu, MenuItem, Selector, Widget, WindowDesc, WindowId};
+
+#[derive(Data, Clone, Lens)]
+struct AppState{
+    image: Option<ImageBuf>
+}
+
+const IMAGE: Selector<Option<ImageBuf>> = Selector::new("update-image");
 
 fn main() {
     // main window of the application
@@ -18,7 +25,10 @@ fn main() {
  It will build all start widgets useful to launch the application
 */
 fn ui_builder() -> impl Widget<String> {
-    Flex::column().with_spacer(50.0)
+    let label = Label::new("Press Ctrl+Alt+S to take a screenshot");
+
+    Flex::column()
+        .with_child(label)
 }
 
 /**
@@ -27,14 +37,33 @@ fn ui_builder() -> impl Widget<String> {
 fn menu_builder<T: Data>(_: Option<WindowId>, _: &T, _: &Env) -> Menu<String> {
     let open_file_command = Command::new(
         druid::commands::SHOW_OPEN_PANEL,
-        FileDialogOptions::new(),
+        FileDialogOptions::new()
+            .allowed_types(vec![FileSpec::PNG, FileSpec::JPG, FileSpec::GIF])
+            .default_type(FileSpec::PNG)
+            .title("Open Image"),
         druid::Target::Auto,
     );
-    let open_file = MenuItem::new(LocalizedString::new("open-screen-file").with_placeholder("Open")).command(open_file_command);
+    let open_file = MenuItem::new(LocalizedString::new("open-screen-file").with_placeholder("Open"))
+        .command(open_file_command)
+        .on_activate(|ctx, _, _| {
+            if let Some(result) = ctx.submit_command(open_file_command.clone()) {
+                if let Some(file_info) = result.try_unwrap::<Option<FileInfo>>().ok().flatten() {
+                    if let Some(file_path) = file_info.path() {
+                        println!("File selezionato: {:?}", file_path);
+                    }
+                }
+            }
+        });
 
     let save_file = MenuItem::new(LocalizedString::new("save-screen-file").with_placeholder("Save"));
     let save_as_file = MenuItem::new(LocalizedString::new("save-as-screen-file").with_placeholder("Save As"));
-    let copy_file= MenuItem::new(LocalizedString::new("copy-screen-file").with_placeholder("Copy"));
+
+    let copy_file_command = Command::new(
+        druid::commands::COPY,
+        (),
+        druid::Target::Auto
+    );
+    let copy_file= MenuItem::new(LocalizedString::new("copy-screen-file").with_placeholder("Copy")).command(copy_file_command);
 
     //it creates the file menu on the top of the application
     let mut file_menu = Menu::new("File").entry(open_file).separator();
@@ -53,12 +82,9 @@ fn menu_builder<T: Data>(_: Option<WindowId>, _: &T, _: &Env) -> Menu<String> {
     let mut menu = Menu::empty();
     menu = menu.entry(file_menu);
     menu = menu.entry(settings_menu);
+
     return menu;
 }
-
-
-
-
 
 
 
