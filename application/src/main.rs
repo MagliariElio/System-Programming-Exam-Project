@@ -1,12 +1,12 @@
 use druid::widget::{Flex, Label};
-use druid::{AppLauncher, Command, Data, Env, FileDialogOptions, FileInfo, FileSpec, ImageBuf, Lens, LocalizedString, Menu, MenuItem, Selector, Widget, WindowDesc, WindowId};
+use druid::{AppLauncher, Command, Data, Env, FileDialogOptions, FileSpec, ImageBuf, Lens, LocalizedString, Menu, MenuItem, Selector, Widget, WindowDesc, WindowId};
 
 #[derive(Data, Clone, Lens)]
-struct AppState{
+struct AppState{                    // stato dell'applicazione
     image: Option<ImageBuf>
 }
 
-const IMAGE: Selector<Option<ImageBuf>> = Selector::new("update-image");
+const IMAGE: Selector<Option<ImageBuf>> = Selector::new("update-image");        // immagine caricata da open file
 
 fn main() {
     // main window of the application
@@ -45,7 +45,7 @@ fn menu_builder<T: Data>(_: Option<WindowId>, _: &T, _: &Env) -> Menu<String> {
     );
     let open_file = MenuItem::new(LocalizedString::new("open-screen-file").with_placeholder("Open"))
         .command(open_file_command)
-        .on_activate(|ctx, _, _| {
+        /*.on_activate(|ctx, _, _| {
             if let Some(result) = ctx.submit_command(open_file_command.clone()) {
                 if let Some(file_info) = result.try_unwrap::<Option<FileInfo>>().ok().flatten() {
                     if let Some(file_path) = file_info.path() {
@@ -53,7 +53,7 @@ fn menu_builder<T: Data>(_: Option<WindowId>, _: &T, _: &Env) -> Menu<String> {
                     }
                 }
             }
-        });
+        })*/;
 
     let save_file = MenuItem::new(LocalizedString::new("save-screen-file").with_placeholder("Save"));
     let save_as_file = MenuItem::new(LocalizedString::new("save-as-screen-file").with_placeholder("Save As"));
