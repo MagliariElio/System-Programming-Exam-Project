@@ -1,0 +1,294 @@
+use tracing::{instrument, warn};
+
+use druid::widget::prelude::*;
+use druid::{Monitor, MouseEvent, Point, Rect, Screen, theme};
+use druid::piet::{LineJoin, StrokeStyle};
+
+///the distance in pixels from the SelectedRegion borders where a click is relevated
+const DISTANCE_MARGIN:f64 = 10.0;
+const BORDER_WIDTH:f64 = 5.;
+
+#[derive(Copy, Clone)]
+enum IfMousePressedWhere {
+    North,
+    NorthEst,
+    Est,
+    SouthEst,
+    South,
+    SouthWest,
+    West,
+    NorthWest,
+    Inside(Point),
+    NotInterested
+}
+
+#[derive(Clone)]
+pub struct SelectedRect {
+    rect: Rect,
+    mouse: IfMousePressedWhere
+}
+
+impl SelectedRect {
+    /// Construct SelectedRegion with coordinates set.
+    pub fn new() -> Self {
+        //TODO : select the screen in a multi-monitor context!
+        let primary_monitor_rect = Screen::get_monitors()
+            .into_iter().filter(|m|m.is_primary()).collect::<Vec<Monitor>>()
+            .first().expect("No primary monitor found!")
+            .virtual_rect();
+        Self {
+            rect: Rect{
+                x0 : primary_monitor_rect.x0,
+                y0 : primary_monitor_rect.y0,
+                x1 : primary_monitor_rect.x1,
+                y1 : primary_monitor_rect.y1,
+            },
+            mouse: IfMousePressedWhere::NotInterested,
+        }
+    }
+
+    fn where_mouse_is(self: &Self, me:&MouseEvent) -> IfMousePressedWhere{
+        let pos = me.pos.clone();
+        let x0 = self.rect.x0.clone();
+        let x1 = self.rect.x1.clone();
+        let y0 = self.rect.y0.clone();
+        let y1 = self.rect.y1.clone();
+        return if f64::abs(pos.x.clone() - x0) < DISTANCE_MARGIN {
+            if f64::abs(pos.y.clone() - y0) < DISTANCE_MARGIN{
+                IfMousePressedWhere::NorthWest
+            } else if f64::abs(pos.y.clone() - y1) < DISTANCE_MARGIN{
+                IfMousePressedWhere::SouthWest
+            } else {
+                IfMousePressedWhere::West
+            }
+        } else if f64::abs(pos.x.clone() - x1) < DISTANCE_MARGIN {
+            if f64::abs(pos.y.clone() - y0) < DISTANCE_MARGIN{
+                IfMousePressedWhere::NorthEst
+            } else if f64::abs(pos.y.clone() - y1) < DISTANCE_MARGIN{
+                IfMousePressedWhere::SouthEst
+            } else {
+                IfMousePressedWhere::Est
+            }
+        } else if f64::abs(pos.y.clone() - y0) < DISTANCE_MARGIN{
+            IfMousePressedWhere::North
+        } else if f64::abs(pos.y.clone() - y1) < DISTANCE_MARGIN{
+            IfMousePressedWhere::South
+        } else if pos.y.clone() > y0 && pos.y.clone() < y1 && pos.x.clone() > x0 && pos.x.clone() < x1{
+            IfMousePressedWhere::Inside(pos)
+        } else {
+            IfMousePressedWhere::NotInterested
+        }
+
+
+    }
+
+    /*
+    #[cfg(test)]
+    pub(crate) fn width_and_height(&self, env: &Env) -> (Option<f64>, Option<f64>) {
+        (
+            self.width.as_ref().map(|w| w.resolve(env)),
+            self.height.as_ref().map(|h| h.resolve(env)),
+        )
+    }
+    */
+}
+
+impl Widget<Rect> for SelectedRect {
+    #[instrument(name = "SelectedRegion", level = "trace", skip(self, ctx, event, data, _env))]
+    fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut Rect, _env: &Env) {
+        match event {
+            Event::MouseDown(me) => {
+                ctx.set_active(true);
+                self.mouse = self.where_mouse_is(me);
+            }
+            Event::MouseMove(me) => {
+                if ctx.is_active(){ //if the mouse has been pressed
+                    let pos = me.pos.clone();
+                    match self.mouse {
+                        IfMousePressedWhere::NotInterested => (),
+                        IfMousePressedWhere::North => {
+                            self.rect.y0 = pos.y;
+                            //Validity check
+                            if self.rect.y0.clone()>=self.rect.y1.clone() {
+                                self.rect.y0 = self.rect.y1.clone()-1.;
+                            }
+                        }
+                        IfMousePressedWhere::NorthEst => {
+                            self.rect.y0 = pos.y;
+                            self.rect.x1 = pos.x;
+                            //Validity check
+                            if self.rect.x1.clone()<=self.rect.x0.clone() {
+                                self.rect.x1 = self.rect.x0.clone()+1.;
+                            }
+                            if self.rect.y0.clone()>=self.rect.y1.clone() {
+                                self.rect.y0 = self.rect.y1.clone()-1.;
+                            }
+                        }
+                        IfMousePressedWhere::Est => {
+                            self.rect.x1 = pos.x;
+                            //Validity check
+                            if self.rect.x1.clone()<=self.rect.x0.clone() {
+                                self.rect.x1 = self.rect.x0.clone()+1.;
+                            }
+                        }
+                        IfMousePressedWhere::SouthEst => {
+                            self.rect.y1 = pos.y;
+                            self.rect.x1 = pos.x;
+                            //Validity check
+                            if self.rect.x1.clone()<=self.rect.x0.clone() {
+                                self.rect.x1 = self.rect.x0.clone()+1.;
+                            }
+                            if self.rect.y1.clone()<=self.rect.y0.clone() {
+                                self.rect.y1 = self.rect.y0.clone()+1.;
+                            }
+                        }
+                        IfMousePressedWhere::South => {
+                            self.rect.y1 = pos.y;
+                            //Validity check
+                            if self.rect.y1.clone()<=self.rect.y0.clone() {
+                                self.rect.y1 = self.rect.y0.clone()+1.;
+                            }
+                        }
+                        IfMousePressedWhere::SouthWest => {
+                            self.rect.y1 = pos.y;
+                            self.rect.x0 = pos.x;
+                            //Validity check
+                            if self.rect.x0.clone()>=self.rect.x1.clone() {
+                                self.rect.x0 = self.rect.x1.clone()-1.;
+                            }
+                            if self.rect.y1.clone()<=self.rect.y0.clone() {
+                                self.rect.y1 = self.rect.y0.clone()+1.;
+                            }
+                        }
+                        IfMousePressedWhere::West => {
+                            self.rect.x0 = pos.x;
+                            //Validity check
+                            if self.rect.x0.clone()>=self.rect.x1.clone() {
+                                self.rect.x0 = self.rect.x1.clone()-1.;
+                            }
+                        }
+                        IfMousePressedWhere::NorthWest => {
+                            self.rect.y0 = pos.y; self.rect.x0 = pos.x;
+                            //Validity check
+                            if self.rect.x0.clone()>=self.rect.x1.clone() {
+                                self.rect.x0 = self.rect.x1.clone()-1.;
+                            }
+                            if self.rect.y0.clone()>=self.rect.y1.clone() {
+                                self.rect.y0 = self.rect.y1.clone()-1.;
+                            }
+                        }
+                        IfMousePressedWhere::Inside(old_pos) => {
+                            self.rect.y0 += pos.y.clone() - old_pos.y.clone();
+                            self.rect.y1 += pos.y.clone() - old_pos.y;
+                            self.rect.x0 += pos.x.clone() - old_pos.x.clone();
+                            self.rect.x1 += pos.x.clone() - old_pos.x;
+                            self.mouse = IfMousePressedWhere::Inside(pos);
+                            //TODO : validity check!
+                        }
+                    }
+                } else { //if isn't active: the mouse has not been pressed
+                    match self.mouse {
+                        IfMousePressedWhere::North => {
+                            //TODO: change the mouse icon
+                        }
+                        IfMousePressedWhere::NorthEst => {
+                            //TODO: change the mouse icon
+                        }
+                        IfMousePressedWhere::Est => {
+                            //TODO: change the mouse icon
+                        }
+                        IfMousePressedWhere::SouthEst => {
+                            //TODO: change the mouse icon
+                        }
+                        IfMousePressedWhere::South => {
+                            //TODO: change the mouse icon
+                        }
+                        IfMousePressedWhere::SouthWest => {
+                            //TODO: change the mouse icon
+                        }
+                        IfMousePressedWhere::West => {
+                            //TODO: change the mouse icon
+                        }
+                        IfMousePressedWhere::NorthWest => {
+                            //TODO: change the mouse icon
+                        }
+                        _ => ()
+                    }
+                }
+            }
+            Event::MouseUp(_)=>{
+                self.mouse = IfMousePressedWhere::NotInterested;
+                ctx.set_active(false);
+            }
+            _ => (),
+        }
+
+        //Validity check: inside the monitor size
+        let primary_monitor_rect = Screen::get_monitors()
+            .into_iter().filter(|m|m.is_primary()).collect::<Vec<Monitor>>()
+            .first().expect("No primary monitor found!")
+            .virtual_rect();
+        if self.rect.x0<primary_monitor_rect.x0{
+            self.rect.x0 = primary_monitor_rect.x0;
+        }
+        if self.rect.y0<primary_monitor_rect.y0{
+            self.rect.y0 = primary_monitor_rect.y0;
+        }
+        if self.rect.x1>=primary_monitor_rect.x1{
+            self.rect.x1 = primary_monitor_rect.x1-BORDER_WIDTH;
+        }
+        if self.rect.y1>=primary_monitor_rect.y1{
+            self.rect.y1 = primary_monitor_rect.y1-BORDER_WIDTH;
+        }
+        *data=self.rect;
+    }
+
+    #[instrument(name = "SelectedRegion", level = "trace", skip(self, ctx, event, _data, _env))]
+    fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, _data: &Rect, _env: &Env) {
+        if let LifeCycle::HotChanged(_) | LifeCycle::DisabledChanged(_) | LifeCycle::ViewContextChanged(_) | LifeCycle::FocusChanged(_) = event {
+            ctx.request_paint();
+        }
+    }
+
+    #[instrument(
+    name = "SelectedRegion",
+    level = "trace",
+    skip(self, ctx, _old_data, _data, _env)
+    )]
+    fn update(&mut self, ctx: &mut UpdateCtx, _old_data: &Rect, _data: &Rect, _env: &Env) {
+        ctx.request_paint();
+    }
+
+    #[instrument(name = "SelectedRegion", level = "trace", skip(self, _ctx, bc, _data, _env))]
+    fn layout(&mut self, _ctx: &mut LayoutCtx, bc: &BoxConstraints, _data: &Rect, _env: &Env) -> Size {
+        bc.debug_check("SelectedRegion");
+        assert!(self.rect.x1.clone()>=self.rect.x0.clone());
+        assert!(self.rect.y1.clone()>=self.rect.y0.clone());
+        bc.constrain(Size::new(
+            self.rect.x1.clone()-self.rect.x0.clone(),
+            self.rect.y1.clone()-self.rect.y0.clone())
+        )
+    }
+
+    #[instrument(name = "SelectedRegion", level = "trace", skip(self, ctx, _data, env))]
+    fn paint(&mut self, ctx: &mut PaintCtx, _data: &Rect, env: &Env) {
+        let rect = Rect{
+            x0: self.rect.x0.clone(),
+            y0: self.rect.y0.clone(),
+            x1: self.rect.x1.clone(),
+            y1: self.rect.y1.clone(),
+        };
+        let border_color = if ctx.is_hot() && !ctx.is_disabled() {
+            env.get(theme::BORDER_DARK)
+        } else {
+            env.get(theme::BORDER_LIGHT)
+        };
+        let style: StrokeStyle = StrokeStyle::new()
+            .dash_pattern(&[12.0,7.0])
+            .line_join(LineJoin::Round)
+            .line_cap(Default::default())
+            .dash_offset(0.0);
+        ctx.stroke_styled(rect, &border_color, BORDER_WIDTH, &style);
+    }
+
+}
