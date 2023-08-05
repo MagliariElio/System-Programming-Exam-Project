@@ -1,98 +1,73 @@
-use druid::widget::{Flex, Label};
-use druid::{AppLauncher, Command, Data, Env, FileDialogOptions, FileSpec, ImageBuf, Lens, LocalizedString, Menu, MenuItem, Selector, Widget, WindowDesc, WindowId};
+mod custom_widget;
 
-#[derive(Data, Clone, Lens)]
-struct AppState{                    // stato dell'applicazione
-    image: Option<ImageBuf>
+use druid::widget::{Container, Flex, Label, LensWrap, ZStack};
+use druid::{AppLauncher, Data, Env, Lens, LocalizedString, Widget, WindowDesc, WindowState, Color, Rect, Vec2, UnitPoint, EventCtx, FontDescriptor, FontFamily};
+use crate::custom_widget::{SelectedRect,ColoredButton};
+
+const WINDOW_TITLE: LocalizedString<AppState> = LocalizedString::new("screen grabbing utility");
+const X0:f64 = 0.;
+const Y0:f64 = 0.;
+const X1:f64 = 1000.;
+const Y1:f64 = 500.;
+
+#[derive(Clone, Data, Lens)]
+struct AppState{
+    rect: Rect
 }
 
-const IMAGE: Selector<Option<ImageBuf>> = Selector::new("update-image");        // immagine caricata da open file
-
 fn main() {
-    // main window of the application
-    let main_window = WindowDesc::new(ui_builder())
-        .menu(menu_builder::<String>)
-        .title(LocalizedString::new("Screen-Capture-Title").with_placeholder("Screen Capture"));
+    // describe the main window
+    let main_window = WindowDesc::new(build_root_widget())
+        .title(WINDOW_TITLE)
+        .set_always_on_top(true)
+        .transparent(true)
+        .resizable(false)
+        .show_titlebar(false)
+        .set_window_state(WindowState::Maximized);
 
-    // launcher application
+    // create the initial app state
+    let initial_state = AppState {
+        rect: Rect{
+            x0: X0,
+            y0: Y0,
+            x1: X1,
+            y1: Y1,
+        }
+    };
+
+    // start the application
     AppLauncher::with_window(main_window)
-        .log_to_console()
-        .launch(String::new())
+        .launch(initial_state)
         .expect("Failed to launch application");
 }
 
-/**
- It will build all start widgets useful to launch the application
-*/
-fn ui_builder() -> impl Widget<String> {
-    let label = Label::new("Press Ctrl+Alt+S to take a screenshot");
+fn build_root_widget() -> impl Widget<AppState> {
+    let rectangle = LensWrap::new(SelectedRect::new(),AppState::rect);
+    let label = Label::new(|data: &AppState, _env: &Env|
+        format!("Resize and drag as you like.\n- Top Left: ({}, {})\n- Bottom Right: ({}, {})",
+                data.rect.x0,data.rect.y0,data.rect.x1,data.rect.y1));
 
-    Flex::column()
-        .with_child(label)
+    let take_screenshot_button=ColoredButton::from_label(
+        Label::new("Take Screen").with_text_color(Color::BLACK).with_font(FontDescriptor::new(FontFamily::MONOSPACE)).with_text_size(20.)
+    )
+        .with_color(Color::rgb8(70,250,70).with_alpha(0.40))
+        .on_click(|_ctx:&mut EventCtx,_data: &mut AppState,_env: &Env|{
+            //TODO: take the screen shot!!
+        });
+    let close_button = ColoredButton::from_label(
+        Label::new("Close").with_text_color(Color::BLACK).with_font(FontDescriptor::new(FontFamily::MONOSPACE)).with_text_size(20.)
+    )
+        .with_color(Color::rgb8(250, 70, 70).with_alpha(0.40))
+        .on_click(|ctx:&mut EventCtx,_data: &mut AppState,_env: &Env|{
+            ctx.window().close();
+        });
+    let buttons_flex = Flex::row().with_child(take_screenshot_button).with_default_spacer().with_child(close_button);
+
+    let mut label_container =  Container::new(label);
+    label_container.set_background(Color::BLACK.with_alpha(0.35));
+
+    let zstack = ZStack::new(rectangle)
+        .with_child(label_container,Vec2::new(1.0, 1.0),Vec2::ZERO, UnitPoint::LEFT,Vec2::new(10.0, 0.0))
+        .with_child(buttons_flex,Vec2::new(1.0, 1.0),Vec2::ZERO, UnitPoint::BOTTOM_RIGHT,Vec2::new(-100.0, -100.0));
+    zstack
 }
-
-/**
- It builds the main menù on the top of the interface
-*/
-fn menu_builder<T: Data>(_: Option<WindowId>, _: &T, _: &Env) -> Menu<String> {
-    let open_file_command = Command::new(
-        druid::commands::SHOW_OPEN_PANEL,
-        FileDialogOptions::new()
-            .allowed_types(vec![FileSpec::PNG, FileSpec::JPG, FileSpec::GIF])
-            .default_type(FileSpec::PNG)
-            .title("Open Image"),
-        druid::Target::Auto,
-    );
-    let open_file = MenuItem::new(LocalizedString::new("open-screen-file").with_placeholder("Open"))
-        .command(open_file_command)
-        /*.on_activate(|ctx, _, _| {
-            if let Some(result) = ctx.submit_command(open_file_command.clone()) {
-                if let Some(file_info) = result.try_unwrap::<Option<FileInfo>>().ok().flatten() {
-                    if let Some(file_path) = file_info.path() {
-                        println!("File selezionato: {:?}", file_path);
-                    }
-                }
-            }
-        })*/;
-
-    let save_file = MenuItem::new(LocalizedString::new("save-screen-file").with_placeholder("Save"));
-    let save_as_file = MenuItem::new(LocalizedString::new("save-as-screen-file").with_placeholder("Save As"));
-
-    let copy_file_command = Command::new(
-        druid::commands::COPY,
-        (),
-        druid::Target::Auto
-    );
-    let copy_file= MenuItem::new(LocalizedString::new("copy-screen-file").with_placeholder("Copy")).command(copy_file_command);
-
-    //it creates the file menu on the top of the application
-    let mut file_menu = Menu::new("File").entry(open_file).separator();
-    file_menu = file_menu.entry(save_file);
-    file_menu = file_menu.entry(save_as_file).separator();
-    file_menu = file_menu.entry(copy_file);
-
-    let shortcut_keys_preference =  MenuItem::new(LocalizedString::new("shortcut-keys-preferences").with_placeholder("Shortcut Key Preferences"));
-    let save_location =  MenuItem::new(LocalizedString::new("save-location").with_placeholder("Save Location"));
-    let about_us =  MenuItem::new(LocalizedString::new("about-us").with_placeholder("About Us"));
-
-    let mut settings_menu = Menu::new("Settings").entry(shortcut_keys_preference);
-    settings_menu = settings_menu.entry(save_location);
-    settings_menu = settings_menu.entry(about_us);
-
-    let mut menu = Menu::empty();
-    menu = menu.entry(file_menu);
-    menu = menu.entry(settings_menu);
-
-    return menu;
-}
-
-
-
-
-
-
-
-
-
-
-
