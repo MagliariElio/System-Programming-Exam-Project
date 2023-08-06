@@ -8,4 +8,5 @@ authors = ["Pietro Bertorelle","Francesco Abate","Elio Magliari"]
 
 [dependencies]
 druid = "0.8.3"
+image = "0.24.6"
 tracing = "0.1.37"
