@@ -1,7 +1,8 @@
 mod custom_widget;
 
-use druid::widget::{Container, Flex, Label, LensWrap, ZStack};
-use druid::{AppLauncher, Data, Env, Lens, LocalizedString, Widget, WindowDesc, WindowState, Color, Rect, Vec2, UnitPoint, EventCtx, FontDescriptor, FontFamily};
+use druid::widget::{Align, Button, Container, Flex, Label, LensWrap, ZStack};
+use druid::{commands as sys_cmd, AppLauncher, Data, Env, Lens, LocalizedString, Widget, WindowDesc, WindowState, Color, Rect, Vec2, UnitPoint, EventCtx, FontDescriptor, FontFamily, WindowId};
+use druid::Target::{Auto};
 use crate::custom_widget::{SelectedRect,ColoredButton};
 
 const WINDOW_TITLE: LocalizedString<AppState> = LocalizedString::new("screen grabbing utility");
@@ -12,19 +13,15 @@ const Y1:f64 = 500.;
 
 #[derive(Clone, Data, Lens)]
 struct AppState{
-    rect: Rect
+    rect: Rect,
+    #[data(ignore)]
+    main_window_id: Option<WindowId>,
 }
 
 fn main() {
-    // describe the main window
-    let main_window = WindowDesc::new(build_root_widget())
-        .title(WINDOW_TITLE)
-        .set_always_on_top(true)
-        .transparent(true)
-        .resizable(false)
-        .show_titlebar(false)
-        .set_window_state(WindowState::Maximized);
-
+    let main_window=WindowDesc::new(build_root_widget())
+        .title("Welcome!")
+        .window_size((1000.,500.));
     // create the initial app state
     let initial_state = AppState {
         rect: Rect{
@@ -32,7 +29,8 @@ fn main() {
             y0: Y0,
             x1: X1,
             y1: Y1,
-        }
+        },
+        main_window_id: None,
     };
 
     // start the application
@@ -41,27 +39,45 @@ fn main() {
         .expect("Failed to launch application");
 }
 
-fn build_root_widget() -> impl Widget<AppState> {
+fn build_screenshot_widget() -> impl Widget<AppState> {
     let rectangle = LensWrap::new(SelectedRect::new(),AppState::rect);
+
     let label = Label::new(|data: &AppState, _env: &Env|
         format!("Resize and drag as you like.\n- Top Left: ({}, {})\n- Bottom Right: ({}, {})",
                 data.rect.x0,data.rect.y0,data.rect.x1,data.rect.y1));
 
     let take_screenshot_button=ColoredButton::from_label(
-        Label::new("Take Screen").with_text_color(Color::BLACK).with_font(FontDescriptor::new(FontFamily::MONOSPACE)).with_text_size(20.)
-    )
-        .with_color(Color::rgb8(70,250,70).with_alpha(0.40))
-        .on_click(|_ctx:&mut EventCtx,_data: &mut AppState,_env: &Env|{
-            //TODO: take the screen shot!!
-        });
-    let close_button = ColoredButton::from_label(
-        Label::new("Close").with_text_color(Color::BLACK).with_font(FontDescriptor::new(FontFamily::MONOSPACE)).with_text_size(20.)
-    )
-        .with_color(Color::rgb8(250, 70, 70).with_alpha(0.40))
+        Label::new("Take Screen")
+            .with_text_color(Color::BLACK)
+            .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
+            .with_text_size(20.)
+    ).with_color(Color::rgb8(70,250,70)
+        .with_alpha(0.40))
         .on_click(|ctx:&mut EventCtx,_data: &mut AppState,_env: &Env|{
+            ctx.submit_command(sys_cmd::HIDE_WINDOW.to(Auto));
+            //TODO: take the screen shot!!
+            ctx.submit_command(sys_cmd::SHOW_WINDOW.to(Auto));
+        });
+
+    let close_button = ColoredButton::from_label(
+        Label::new("Close")
+            .with_text_color(Color::BLACK)
+            .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
+            .with_text_size(20.)
+    ).with_color(Color::rgb8(250, 70, 70)
+        .with_alpha(0.40))
+        .on_click(|ctx:&mut EventCtx,data: &mut AppState,_env: &Env|{
+            let main_id = data.main_window_id
+                .expect("How did you opened this window?");
+            ctx.get_external_handle().submit_command(sys_cmd::SHOW_WINDOW, (), main_id)
+                .expect("Error sending the event");
             ctx.window().close();
         });
-    let buttons_flex = Flex::row().with_child(take_screenshot_button).with_default_spacer().with_child(close_button);
+
+    let buttons_flex = Flex::row()
+        .with_child(take_screenshot_button)
+        .with_default_spacer()
+        .with_child(close_button);
 
     let mut label_container =  Container::new(label);
     label_container.set_background(Color::BLACK.with_alpha(0.35));
@@ -70,4 +86,22 @@ fn build_root_widget() -> impl Widget<AppState> {
         .with_child(label_container,Vec2::new(1.0, 1.0),Vec2::ZERO, UnitPoint::LEFT,Vec2::new(10.0, 0.0))
         .with_child(buttons_flex,Vec2::new(1.0, 1.0),Vec2::ZERO, UnitPoint::BOTTOM_RIGHT,Vec2::new(-100.0, -100.0));
     zstack
+}
+
+fn build_root_widget()-> impl Widget<AppState>{
+    let take_screenshot_button = Button::from_label(Label::new("Take screen"))
+        .on_click(|ctx:&mut EventCtx,data: &mut AppState,_env: &Env|{
+            data.main_window_id = Some(ctx.window_id());
+            ctx.submit_command(sys_cmd::HIDE_WINDOW.to(Auto));
+            ctx.new_window(WindowDesc::new(build_screenshot_widget())
+                               .title(WINDOW_TITLE)
+                               .set_always_on_top(true)
+                               .transparent(true)
+                               .resizable(false)
+                               .show_titlebar(false)
+                               .set_window_state(WindowState::Maximized))
+
+        });
+    let layout = Flex::row().with_child(take_screenshot_button);
+    Align::centered(layout)
 }
