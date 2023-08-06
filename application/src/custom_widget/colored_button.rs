@@ -32,6 +32,7 @@ pub struct ColoredButton<T> {
     color: Option<Color>
 }
 
+#[allow(dead_code)]
 impl<T: Data> ColoredButton<T> {
     /// Create a new button with a text label.
     ///
