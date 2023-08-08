@@ -2,14 +2,20 @@ mod custom_widget;
 
 use std::fs::File;
 use std::io::BufWriter;
+use std::ops::Deref;
+use std::path::PathBuf;
 use std::sync::Arc;
-use druid::widget::{Button, Container, CrossAxisAlignment, FillStrat, Flex, FlexParams, Image, Label, LensWrap, MainAxisAlignment, Maybe, ZStack};
-use druid::{commands as sys_cmd, AppLauncher, Data, Env, Lens, LocalizedString, Widget, WindowDesc, WindowState, Color, Rect, Vec2, UnitPoint, EventCtx, FontDescriptor, FontFamily, WindowId, Menu, ImageBuf, WidgetExt, BoxConstraints, LayoutCtx};
+use std::sync::mpsc::TryRecvError;
+use druid::widget::{Button, Container, CrossAxisAlignment, FillStrat, Flex, FlexParams, IdentityWrapper, Image, Label, LensWrap, MainAxisAlignment, Maybe, Svg, SvgData, ZStack};
+use druid::{commands as sys_cmd, AppLauncher, Data, Env, Lens, LocalizedString, Widget, WindowDesc, WindowState, Color, Rect, Vec2, UnitPoint, EventCtx, FontDescriptor, FontFamily, WindowId, Menu, ImageBuf, WidgetExt, BoxConstraints, LayoutCtx, FileInfo, FileSpec, Target, WidgetId, DelegateCtx, Selector};
+use druid::kurbo::SvgArc;
 use druid::piet::{ImageFormat, InterpolationMode};
-use druid::Target::{Auto};
+use druid::Target::{Auto, Global};
 use image::io::Reader;
-use crate::custom_widget::{SelectedRect, ColoredButton, OverImage};
+use tracing::{error, Id};
+use crate::custom_widget::{SelectedRect, ColoredButton, CustomZStack};
 
+pub const SHOW_OVER_IMG: Selector<&'static str> = Selector::new("../../icons/open-file.svg");
 const WINDOW_TITLE: LocalizedString<AppState> = LocalizedString::new("screen grabbing utility");
 const X0:f64 = 0.;
 const Y0:f64 = 0.;
@@ -20,7 +26,7 @@ const Y1:f64 = 500.;
 struct AppState{
     rect: Rect,
     #[data(ignore)]
-    main_window_id: Option<WindowId>,
+    main_window_id: Option<WindowId>
 }
 
 fn main() {
@@ -59,7 +65,7 @@ fn build_screenshot_widget() -> impl Widget<AppState> {
             .with_text_size(20.)
     ).with_color(Color::rgb8(70,250,70)
         .with_alpha(0.40))
-        .on_click(|ctx:&mut EventCtx,_data: &mut AppState,_env: &Env|{
+        .on_click(|ctx:&mut EventCtx, _data: &mut AppState, _env: &Env|{
             ctx.submit_command(sys_cmd::HIDE_WINDOW.to(Auto));
             //TODO: take the screen shot!!
             ctx.submit_command(sys_cmd::SHOW_WINDOW.to(Auto));
@@ -72,7 +78,7 @@ fn build_screenshot_widget() -> impl Widget<AppState> {
             .with_text_size(20.)
     ).with_color(Color::rgb8(250, 70, 70)
         .with_alpha(0.40))
-        .on_click(|ctx:&mut EventCtx,data: &mut AppState,_env: &Env|{
+        .on_click(|ctx:&mut EventCtx, data: &mut AppState, _env: &Env|{
             let main_id = data.main_window_id
                 .expect("How did you opened this window?");
             ctx.get_external_handle().submit_command(sys_cmd::SHOW_WINDOW, (), main_id)
@@ -96,7 +102,7 @@ fn build_screenshot_widget() -> impl Widget<AppState> {
 
 fn build_root_widget()-> impl Widget<AppState>{
     let take_screenshot_button = Button::from_label(Label::new("Take screen"))
-        .on_click(|ctx:&mut EventCtx,data: &mut AppState,_env: &Env|{
+        .on_click(|ctx:&mut EventCtx, data: &mut AppState, _env: &Env|{
             data.main_window_id = Some(ctx.window_id());
             ctx.submit_command(sys_cmd::HIDE_WINDOW.to(Auto));
             ctx.new_window(WindowDesc::new(build_screenshot_widget())
@@ -118,29 +124,25 @@ fn build_root_widget()-> impl Widget<AppState>{
         )
     );
 
-    let img = Reader::open("./icons/open-file.png")
-        .expect("Can't open the over-image!")
-        .decode()
-        .expect("Can't decode the over-image");
-    let over_image = OverImage::new(ImageBuf::from_raw(
-        Arc::<[u8]>::from(img.as_bytes()), ImageFormat::RgbaSeparate, img.width() as usize, img.height() as usize)
-    ).fill_mode(FillStrat::None).interpolation_mode(InterpolationMode::NearestNeighbor).border(Color::BLACK,3.)
-        .on_click(|ctx,data,env|{ctx.request_update()});
-
-    let zstack = ZStack::new(screenshot_image)
-        .with_child(over_image,Vec2::new(1.,1.),Vec2::ZERO,UnitPoint::CENTER,Vec2::new(0.,0.));
+    let zstack_id = WidgetId::next();
+    let mut zstack = IdentityWrapper::wrap(CustomZStack::new(screenshot_image),zstack_id);
+    let add_img_button = Button::from_label(Label::new("+"))
+        .on_click(move |ctx:&mut EventCtx, data: &mut AppState, env: &Env|{
+            ctx.submit_command(SHOW_OVER_IMG.with("./icons/open-file.png").to(Target::Widget(zstack_id)));
+        });
 
     let mut flex = Flex::row();
     flex.set_must_fill_main_axis(true);
-    flex.add_child(Container::new(zstack));
+    flex.add_child(zstack);
     flex.add_default_spacer();
     flex.add_flex_child(Container::new(take_screenshot_button),FlexParams::new(1.,CrossAxisAlignment::End));
+    flex.add_child(add_img_button);
     flex.set_main_axis_alignment(MainAxisAlignment::Center);
     let layout = flex.background(Color::SILVER);
     layout
 }
 
-fn make_menu<T: Data>(_window: Option<WindowId>, _data: &AppState, _env: &Env) -> Menu<T> {
+fn make_menu(_window: Option<WindowId>, _data: &AppState, _env: &Env) -> Menu<AppState> {
     let mut base = Menu::empty();
     #[cfg(target_os = "macos")]
     {
