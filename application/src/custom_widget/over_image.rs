@@ -300,7 +300,7 @@ impl<T: Data> Widget<T> for OverImage {
         let resized_img = resize(&img, image_size.width() as u32, image_size.height() as u32, FilterType::Nearest);
         let width = resized_img.width() as usize; let height = resized_img.height() as usize;
         self.image_data = ImageBuf::from_raw(resized_img.into_raw(), ImageFormat::RgbaSeparate, width, height);
-        println!("{}",self.image_data.size());
+        println!("{}",self.image_data.width());
         ctx.request_paint();
         ctx.window().invalidate(/*Rect::new(ctx.window_origin().x,ctx.window_origin().y,ctx.window_origin().x+image_size.x1,ctx.window_origin().y+image_size.y1)*/);
         //*data=self.image_size;

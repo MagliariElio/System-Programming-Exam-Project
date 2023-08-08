@@ -13,7 +13,7 @@ use druid::piet::{ImageFormat, InterpolationMode};
 use druid::Target::{Auto, Global};
 use image::io::Reader;
 use tracing::{error, Id};
-use crate::custom_widget::{SelectedRect, ColoredButton, CustomZStack};
+use crate::custom_widget::{SelectedRect, ColoredButton, CustomZStack, OverImage};
 
 pub const SHOW_OVER_IMG: Selector<&'static str> = Selector::new("../../icons/open-file.svg");
 const WINDOW_TITLE: LocalizedString<AppState> = LocalizedString::new("screen grabbing utility");
