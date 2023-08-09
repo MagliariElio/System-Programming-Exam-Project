@@ -1,14 +1,11 @@
-use std::any::Any;
-use std::collections::linked_list::LinkedList;
-use std::path::PathBuf;
 use std::sync::Arc;
-use druid::{commands as sys_cmd, AppDelegate, BoxConstraints, Command, Data, DelegateCtx, Env, Event, EventCtx, Handled, InternalEvent, LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx, Point, Rect, Size, Target, UnitPoint, UpdateCtx, Vec2, Widget, WidgetExt, WidgetPod, ImageBuf, WindowDesc, FileInfo, WidgetId, Key};
+use druid::{BoxConstraints, Data, Env, Event, EventCtx, InternalEvent, LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx, Point, Rect, Size, UnitPoint, UpdateCtx, Vec2, Widget, WidgetExt, WidgetPod, ImageBuf};
 use druid::piet::ImageFormat;
-use druid::widget::{Button, Image, Label, Svg, SvgData};
-use image::{DynamicImage, GenericImage, GenericImageView, RgbaImage};
+use druid::widget::{Image};
+use image::{DynamicImage, GenericImage, GenericImageView, Pixel};
+use image::imageops::FilterType;
 use image::io::Reader;
-use tracing::error;
-use crate::{AppState, SHOW_OVER_IMG};
+use crate::{SAVE_OVER_IMG, SHOW_OVER_IMG};
 
 /// A container that stacks its children on top of each other.
 ///
@@ -17,7 +14,7 @@ use crate::{AppState, SHOW_OVER_IMG};
 pub struct CustomZStack<T> {
     layers: Vec<ZChild<T>>,
     over_img: Option<DynamicImage>,
-    id: Option<WidgetId>
+    back_img: Option<DynamicImage>,
 }
 
 struct ZChild<T> {
@@ -36,14 +33,13 @@ impl <T: Data> CustomZStack<T>  {
         Self {
             layers: vec![ZChild {
                 child: WidgetPod::new(base_layer.boxed()),
-
                 relative_size: Vec2::new(1.0, 1.0),
                 absolute_size: Vec2::ZERO,
                 position: UnitPoint::CENTER,
                 offset: Vec2::ZERO,
             }],
             over_img: None,
-            id: None,
+            back_img: None,
         }
     }
 
@@ -66,72 +62,106 @@ impl <T: Data> CustomZStack<T>  {
         position: UnitPoint,
         offset: Vec2,
     ) -> &mut Self {
-        let next_index = self.layers.len() - 1;
-        self.layers.insert(
-            next_index,
-            ZChild {
+        if self.layers.len() as i32 - 1 < 0 {
+            self.layers = vec![ZChild {
                 child: WidgetPod::new(child.boxed()),
-                relative_size,
-                absolute_size,
-                position,
-                offset,
-            },
-        );
+                relative_size: Vec2::new(1.0, 1.0),
+                absolute_size: Vec2::ZERO,
+                position: UnitPoint::CENTER,
+                offset: Vec2::ZERO,
+            }]
+        } else {
+            let next_index = self.layers.len() - 1;
+            self.layers.insert(
+                next_index,
+                ZChild {
+                    child: WidgetPod::new(child.boxed()),
+                    relative_size,
+                    absolute_size,
+                    position,
+                    offset,
+                },
+            );
+        }
         self
     }
 
     fn rm_child(self: &mut Self)-> ZChild<T>{
-        self.layers.pop().unwrap()
+        self.layers.remove(0)
     }
 
-    pub fn show_over_svg(self: &mut Self, open_path: &'static str){
-        let img = Reader::open(open_path).unwrap().decode().unwrap();
-        /*let svg_img = match include_str!("../../icons/open-file.svg").parse::<SvgData>() {
-            Ok(svg) => svg,
-            Err(err) => {
-                error!("{}", err);
-                error!("Using an empty SVG instead.");
-                SvgData::default()
-            }
-        };
-        let over_image = Svg::new(svg_img.clone());*/
-        let over_image = Image::new(ImageBuf::from_raw(
-            Arc::<[u8]>::from(img.as_bytes()), ImageFormat::RgbaSeparate, img.width() as usize, img.height() as usize
-        ));
-        self.with_child(over_image, Vec2::new(1.,1.), Vec2::ZERO, UnitPoint::CENTER, Vec2::new(5.,5.))
-            .over_img = Some(img);
+    pub fn show_over_img(self: &mut Self, open_path: &'static str) -> bool{
+        if self.over_img.is_none() {
+            let img = Reader::open(open_path).unwrap().decode().unwrap();
+            let over_image = Image::new(ImageBuf::from_raw(
+                Arc::<[u8]>::from(img.as_bytes()), ImageFormat::RgbaSeparate, img.width() as usize, img.height() as usize
+            ));
+            self.with_child(over_image, Vec2::new(1., 1.), Vec2::ZERO, UnitPoint::CENTER, Vec2::new(5., 5.))
+                .over_img = Some(img);
+            true
+        } else {
+            false
+        }
     }
     ///return true if has correctly save, false otherwise
-    pub fn save_new_img(self: &mut Self, back_img: &mut DynamicImage) ->bool{
+    pub fn save_new_img(self: &mut Self, back_img: &mut DynamicImage, save_path: &'static str, file_name: &str, img_format: image::ImageFormat) ->bool{
+        //TODO: add more over-images at once!
+        //TODO: find a more efficent way without resizing the back image (maybe using the GPU or without resize)!
+        //TODO: if over-image is bigger then back-image crash.
         if self.layers.len() > 1 && self.over_img.is_some(){
-            let img_rect = self.layers.first().unwrap().child.layout_rect();
-            let over_img_rect: Rect = self.layers.get(1).unwrap().child.layout_rect();
-            assert_eq!(img_rect.x0,0.);
-            assert_eq!(img_rect.y0,0.);
-            assert_eq!(img_rect.x1,back_img.width() as f64);
-            assert_eq!(img_rect.y1,back_img.height() as f64);
-            assert!(img_rect.x0<=over_img_rect.x0);
-            assert!(img_rect.y0<=over_img_rect.y0);
-            assert!(img_rect.x1>=over_img_rect.x1);
-            assert!(img_rect.y1>=over_img_rect.y1);
+            let _back_img_resolution = Size::new(back_img.width() as f64, back_img.height() as f64);
+
+            let mut back_img_rect: Rect= self.layers.get(1).unwrap().child.layout_rect();
+            back_img_rect.x0 = back_img_rect.x0.round();
+            back_img_rect.y0 = back_img_rect.y0.round();
+            back_img_rect.x1 = back_img_rect.x1.round();
+            back_img_rect.y1 = back_img_rect.y1.round();
+            let back_img = back_img.resize(back_img_rect.width() as u32, back_img_rect.height() as u32, FilterType::Lanczos3);
+
+            let mut over_img_rect: Rect = self.layers.get(0).unwrap().child.layout_rect();
+            over_img_rect.x0 = over_img_rect.x0.round();
+            over_img_rect.y0 = over_img_rect.y0.round();
+            over_img_rect.x1 = over_img_rect.x1.round();
+            over_img_rect.y1 = over_img_rect.y1.round();
+            let over_img = self.over_img.as_mut().unwrap().resize(over_img_rect.width() as u32, over_img_rect.height() as u32, FilterType::Lanczos3);
+
             let mut out = DynamicImage::new_rgba8(back_img.width(),back_img.height());
-            for j in 0..back_img.height(){
-                for i in 0..back_img.width(){
-                    if over_img_rect.contains(Point::new(i.clone() as f64, j.clone() as f64)){
-                        out.put_pixel(i.clone(), j.clone(), self.over_img.as_ref().unwrap().get_pixel(i.clone(), j.clone()))
+
+            let mut over_i=0;
+            let mut over_j=0;
+            for back_j in back_img_rect.y0 as u32..back_img_rect.y1 as u32{
+                for back_i in back_img_rect.x0 as u32..back_img_rect.x1 as u32{
+                    if over_img_rect.contains(Point::new(back_i as f64, back_j as f64)) {
+                        if over_img.get_pixel(over_i, over_j).channels()[3] > 0 {
+                            out.put_pixel(back_i, back_j, over_img.get_pixel(over_i, over_j));
+                        } else {
+                            out.put_pixel(back_i, back_j, back_img.get_pixel(back_i, back_j));
+                        }
+                        over_i += 1;
+                        if over_i >= over_img.width(){
+                            over_i = 0;
+                            over_j += 1;
+                            assert!(over_j<=over_img.height());
+                        }
                     } else {
-                        assert!(img_rect.contains(Point::new(i.clone() as f64, j.clone() as f64)));
-                        out.put_pixel(i.clone(), j.clone(), back_img.get_pixel(i.clone(), j.clone()))
+                        assert!(back_img_rect.contains(Point::new(back_i as f64, back_j as f64)));
+                        out.put_pixel(back_i, back_j, back_img.get_pixel(back_i, back_j));
                     }
                 }
             }
+
+            //let out = out.resize(back_img_resolution.width as u32, back_img_resolution.height as u32, FilterType::Lanczos3);
+
             while self.layers.len() > 1 {
                 self.rm_child();
             }
             let old = self.rm_child();
             self.with_child(Image::new(ImageBuf::from_raw(
-                Arc::<[u8]>::from(back_img.as_bytes()), ImageFormat::RgbaSeparate, back_img.width() as usize, back_img.height() as usize
+                Arc::<[u8]>::from(out.as_bytes()), ImageFormat::RgbaSeparate, out.width() as usize, out.height() as usize
             )), old.relative_size, old.absolute_size, old.position, old.offset);
+            out.save_with_format(format!("{}{}.{}",save_path,file_name,img_format.extensions_str().first().unwrap()),img_format).unwrap();
+            self.over_img = None;
+            self.back_img = Some(out);
             true
         } else {
             false
@@ -143,9 +173,16 @@ impl<T: Data> Widget<T> for CustomZStack<T> {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut T, env: &Env) {
         match event {
             Event::Command(cmd) => {
-                if cmd.is(SHOW_OVER_IMG){
+                if cmd.is(SHOW_OVER_IMG) {
                     let path = cmd.get_unchecked(SHOW_OVER_IMG);
-                    self.show_over_svg(*path);
+                    self.show_over_img(*path);
+                } else if cmd.is(SAVE_OVER_IMG){
+                    let (mut back_img,path,file_name,file_format) = cmd.get_unchecked(SAVE_OVER_IMG).clone();
+                    if self.back_img.is_none() {
+                        self.save_new_img(&mut back_img, path, file_name, file_format);
+                    } else {
+                        self.save_new_img(&mut self.back_img.clone().unwrap(), path, file_name, file_format);
+                    }
                 }
                 ctx.children_changed();
                 ctx.request_paint();

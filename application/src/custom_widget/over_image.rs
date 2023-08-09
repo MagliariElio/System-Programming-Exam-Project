@@ -1,27 +1,10 @@
-// Copyright 2020 The Druid Authors.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-//! An Image widget.
 //! Please consider using SVG and the SVG widget as it scales much better.
 
-use std::fs::File;
-use std::io::BufWriter;
-use druid::{commands as sys_cmd,kurbo::Rect, piet::{Image as _, ImageBuf, InterpolationMode, PietImage}, widget::prelude::*, Data, MouseEvent, Point, Cursor, Screen, InternalEvent, Monitor};
+use druid::{kurbo::Rect, piet::{Image as _, ImageBuf, InterpolationMode, PietImage}, widget::prelude::*, Data, MouseEvent, Point, Cursor, Screen, Monitor};
 use druid::piet::ImageFormat;
 use druid::widget::FillStrat;
 use tracing::{instrument, trace};
-use image::{GenericImageView, RgbaImage};
+use image::{RgbaImage};
 use image::imageops::{FilterType, resize};
 
 const DISTANCE_MARGIN:f64 = 10.0;
@@ -223,8 +206,8 @@ impl OverImage {
 }
 
 impl<T: Data> Widget<T> for OverImage {
-    #[instrument(name = "Image", level = "trace", skip(self, ctx, event, data, _env))]
-    fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut T, _env: &Env) {
+    #[instrument(name = "Image", level = "trace", skip(self, ctx, event, _data, _env))]
+    fn event(&mut self, ctx: &mut EventCtx, event: &Event, _data: &mut T, _env: &Env) {
         let mut image_size = self.image_size().to_rect();
         match event {
             Event::MouseDown(me) => {
