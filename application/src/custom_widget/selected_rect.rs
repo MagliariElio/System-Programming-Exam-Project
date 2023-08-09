@@ -1,14 +1,14 @@
 use tracing::{instrument, warn};
 
 use druid::widget::prelude::*;
-use druid::{Monitor, MouseEvent, Point, Rect, Screen, theme};
+use druid::{Cursor, Monitor, MouseEvent, Point, Rect, Screen, theme};
 use druid::piet::{LineJoin, StrokeStyle};
 
 ///the distance in pixels from the SelectedRegion borders where a click is relevated
 const DISTANCE_MARGIN:f64 = 10.0;
 const BORDER_WIDTH:f64 = 5.;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 enum IfMousePressedWhere {
     North,
     NorthEst,
@@ -78,19 +78,7 @@ impl SelectedRect {
         } else {
             IfMousePressedWhere::NotInterested
         }
-
-
     }
-
-    /*
-    #[cfg(test)]
-    pub(crate) fn width_and_height(&self, env: &Env) -> (Option<f64>, Option<f64>) {
-        (
-            self.width.as_ref().map(|w| w.resolve(env)),
-            self.height.as_ref().map(|h| h.resolve(env)),
-        )
-    }
-    */
 }
 
 impl Widget<Rect> for SelectedRect {
@@ -102,80 +90,36 @@ impl Widget<Rect> for SelectedRect {
                 self.mouse = self.where_mouse_is(me);
             }
             Event::MouseMove(me) => {
-                if ctx.is_active(){ //if the mouse has been pressed
+                if self.mouse != IfMousePressedWhere::NotInterested{ //if the mouse has been pressed
                     let pos = me.pos.clone();
                     match self.mouse {
                         IfMousePressedWhere::NotInterested => (),
                         IfMousePressedWhere::North => {
                             self.rect.y0 = pos.y;
-                            //Validity check
-                            if self.rect.y0.clone()>=self.rect.y1.clone() {
-                                self.rect.y0 = self.rect.y1.clone()-1.;
-                            }
                         }
                         IfMousePressedWhere::NorthEst => {
                             self.rect.y0 = pos.y;
                             self.rect.x1 = pos.x;
-                            //Validity check
-                            if self.rect.x1.clone()<=self.rect.x0.clone() {
-                                self.rect.x1 = self.rect.x0.clone()+1.;
-                            }
-                            if self.rect.y0.clone()>=self.rect.y1.clone() {
-                                self.rect.y0 = self.rect.y1.clone()-1.;
-                            }
                         }
                         IfMousePressedWhere::Est => {
                             self.rect.x1 = pos.x;
-                            //Validity check
-                            if self.rect.x1.clone()<=self.rect.x0.clone() {
-                                self.rect.x1 = self.rect.x0.clone()+1.;
-                            }
                         }
                         IfMousePressedWhere::SouthEst => {
                             self.rect.y1 = pos.y;
                             self.rect.x1 = pos.x;
-                            //Validity check
-                            if self.rect.x1.clone()<=self.rect.x0.clone() {
-                                self.rect.x1 = self.rect.x0.clone()+1.;
-                            }
-                            if self.rect.y1.clone()<=self.rect.y0.clone() {
-                                self.rect.y1 = self.rect.y0.clone()+1.;
-                            }
                         }
                         IfMousePressedWhere::South => {
                             self.rect.y1 = pos.y;
-                            //Validity check
-                            if self.rect.y1.clone()<=self.rect.y0.clone() {
-                                self.rect.y1 = self.rect.y0.clone()+1.;
-                            }
                         }
                         IfMousePressedWhere::SouthWest => {
                             self.rect.y1 = pos.y;
                             self.rect.x0 = pos.x;
-                            //Validity check
-                            if self.rect.x0.clone()>=self.rect.x1.clone() {
-                                self.rect.x0 = self.rect.x1.clone()-1.;
-                            }
-                            if self.rect.y1.clone()<=self.rect.y0.clone() {
-                                self.rect.y1 = self.rect.y0.clone()+1.;
-                            }
                         }
                         IfMousePressedWhere::West => {
                             self.rect.x0 = pos.x;
-                            //Validity check
-                            if self.rect.x0.clone()>=self.rect.x1.clone() {
-                                self.rect.x0 = self.rect.x1.clone()-1.;
-                            }
                         }
                         IfMousePressedWhere::NorthWest => {
                             self.rect.y0 = pos.y; self.rect.x0 = pos.x;
-                            //Validity check
-                            if self.rect.x0.clone()>=self.rect.x1.clone() {
-                                self.rect.x0 = self.rect.x1.clone()-1.;
-                            }
-                            if self.rect.y0.clone()>=self.rect.y1.clone() {
-                                self.rect.y0 = self.rect.y1.clone()-1.;
-                            }
                         }
                         IfMousePressedWhere::Inside(old_pos) => {
                             self.rect.y0 += pos.y.clone() - old_pos.y.clone();
@@ -183,36 +127,35 @@ impl Widget<Rect> for SelectedRect {
                             self.rect.x0 += pos.x.clone() - old_pos.x.clone();
                             self.rect.x1 += pos.x.clone() - old_pos.x;
                             self.mouse = IfMousePressedWhere::Inside(pos);
-                            //TODO : validity check!
                         }
                     }
-                } else { //if isn't active: the mouse has not been pressed
-                    match self.mouse {
+                } else { //the mouse has not been pressed
+                    match self.where_mouse_is(me) {
                         IfMousePressedWhere::North => {
-                            //TODO: change the mouse icon
+                            ctx.override_cursor(&Cursor::ResizeUpDown);
                         }
                         IfMousePressedWhere::NorthEst => {
-                            //TODO: change the mouse icon
+                            ctx.override_cursor(&Cursor::Crosshair);
                         }
                         IfMousePressedWhere::Est => {
-                            //TODO: change the mouse icon
+                            ctx.override_cursor(&Cursor::ResizeLeftRight);
                         }
                         IfMousePressedWhere::SouthEst => {
-                            //TODO: change the mouse icon
+                            ctx.override_cursor(&Cursor::Crosshair);
                         }
                         IfMousePressedWhere::South => {
-                            //TODO: change the mouse icon
+                            ctx.override_cursor(&Cursor::ResizeUpDown);
                         }
                         IfMousePressedWhere::SouthWest => {
-                            //TODO: change the mouse icon
+                            ctx.override_cursor(&Cursor::Crosshair);
                         }
                         IfMousePressedWhere::West => {
-                            //TODO: change the mouse icon
+                            ctx.override_cursor(&Cursor::ResizeLeftRight);
                         }
                         IfMousePressedWhere::NorthWest => {
-                            //TODO: change the mouse icon
+                            ctx.override_cursor(&Cursor::Crosshair);
                         }
-                        _ => ()
+                        _ => ctx.clear_cursor()
                     }
                 }
             }
@@ -222,7 +165,15 @@ impl Widget<Rect> for SelectedRect {
             }
             _ => (),
         }
-
+        //Keeps validity
+        while self.rect.x1.clone()<=self.rect.x0.clone()+BORDER_WIDTH{
+            self.rect.x1 += 1.+BORDER_WIDTH;
+            self.rect.x0 -= 1.+BORDER_WIDTH;
+        }
+        while self.rect.y1.clone()<=self.rect.y0.clone()+BORDER_WIDTH{
+            self.rect.y1 += 1.+BORDER_WIDTH;
+            self.rect.y0 -= 1.+BORDER_WIDTH;
+        }
         //Validity check: inside the monitor size
         let primary_monitor_rect = Screen::get_monitors()
             .into_iter().filter(|m|m.is_primary()).collect::<Vec<Monitor>>()
@@ -234,10 +185,10 @@ impl Widget<Rect> for SelectedRect {
         if self.rect.y0<primary_monitor_rect.y0{
             self.rect.y0 = primary_monitor_rect.y0;
         }
-        if self.rect.x1>=primary_monitor_rect.x1{
+        if self.rect.x1>primary_monitor_rect.x1{
             self.rect.x1 = primary_monitor_rect.x1-BORDER_WIDTH;
         }
-        if self.rect.y1>=primary_monitor_rect.y1{
+        if self.rect.y1>primary_monitor_rect.y1{
             self.rect.y1 = primary_monitor_rect.y1-BORDER_WIDTH;
         }
         *data=self.rect;
@@ -262,8 +213,6 @@ impl Widget<Rect> for SelectedRect {
     #[instrument(name = "SelectedRegion", level = "trace", skip(self, _ctx, bc, _data, _env))]
     fn layout(&mut self, _ctx: &mut LayoutCtx, bc: &BoxConstraints, _data: &Rect, _env: &Env) -> Size {
         bc.debug_check("SelectedRegion");
-        assert!(self.rect.x1.clone()>=self.rect.x0.clone());
-        assert!(self.rect.y1.clone()>=self.rect.y0.clone());
         bc.constrain(Size::new(
             self.rect.x1.clone()-self.rect.x0.clone(),
             self.rect.y1.clone()-self.rect.y0.clone())

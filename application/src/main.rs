@@ -1,13 +1,20 @@
 mod custom_widget;
 
 use std::sync::Arc;
-use druid::widget::{Align, Button, Container, Flex, Image, Label, LensWrap, ZStack};
-use druid::{commands as sys_cmd, AppLauncher, Data, Env, Lens, LocalizedString, Widget, WindowDesc, WindowState, Color, Rect, Vec2, UnitPoint, EventCtx, FontDescriptor, FontFamily, WindowId, Menu, ImageBuf};
-use druid::piet::ImageFormat;
+use druid::widget::{Button, Container, CrossAxisAlignment, Flex, FlexParams, IdentityWrapper, Image, Label, LensWrap, MainAxisAlignment, ZStack};
+use druid::{commands as sys_cmd, AppLauncher, Data, Env, Lens, LocalizedString, Widget, WindowDesc, WindowState, Color, Rect, Vec2, UnitPoint, EventCtx, FontDescriptor, FontFamily, WindowId, Menu, ImageBuf, WidgetExt, Target, WidgetId, Selector};
+use druid::piet::{ImageFormat};
 use druid::Target::{Auto};
+use image::DynamicImage;
 use image::io::Reader;
-use crate::custom_widget::{SelectedRect,ColoredButton};
+use crate::custom_widget::{SelectedRect, ColoredButton, CustomZStack};
 
+//TODO: Must remove a lot of .clone() methods everywhere!
+//TODO: Set the error messages everywhere they need!
+//TODO: Make the main page GUI beautiful
+
+pub const SHOW_OVER_IMG: Selector<&'static str> = Selector::new("Tell the ZStack to show the over_img, params: over_img path");
+pub const SAVE_OVER_IMG: Selector<(DynamicImage ,&'static str, &str, image::ImageFormat)> = Selector::new("Tell the ZStack to save the modified screenshot, params: (Screenshot original img, Folder Path Where To Save, New File Name, Image Format)");
 const WINDOW_TITLE: LocalizedString<AppState> = LocalizedString::new("screen grabbing utility");
 const X0:f64 = 0.;
 const Y0:f64 = 0.;
@@ -18,7 +25,7 @@ const Y1:f64 = 500.;
 struct AppState{
     rect: Rect,
     #[data(ignore)]
-    main_window_id: Option<WindowId>,
+    main_window_id: Option<WindowId>
 }
 
 fn main() {
@@ -57,9 +64,9 @@ fn build_screenshot_widget() -> impl Widget<AppState> {
             .with_text_size(20.)
     ).with_color(Color::rgb8(70,250,70)
         .with_alpha(0.40))
-        .on_click(|ctx:&mut EventCtx,_data: &mut AppState,_env: &Env|{
+        .on_click(|ctx:&mut EventCtx, _data: &mut AppState, _env: &Env|{
             ctx.submit_command(sys_cmd::HIDE_WINDOW.to(Auto));
-            //TODO: take the screen shot!!
+            //TODO: take the screenshot!!
             ctx.submit_command(sys_cmd::SHOW_WINDOW.to(Auto));
         });
 
@@ -70,7 +77,7 @@ fn build_screenshot_widget() -> impl Widget<AppState> {
             .with_text_size(20.)
     ).with_color(Color::rgb8(250, 70, 70)
         .with_alpha(0.40))
-        .on_click(|ctx:&mut EventCtx,data: &mut AppState,_env: &Env|{
+        .on_click(|ctx:&mut EventCtx, data: &mut AppState, _env: &Env|{
             let main_id = data.main_window_id
                 .expect("How did you opened this window?");
             ctx.get_external_handle().submit_command(sys_cmd::SHOW_WINDOW, (), main_id)
@@ -94,7 +101,7 @@ fn build_screenshot_widget() -> impl Widget<AppState> {
 
 fn build_root_widget()-> impl Widget<AppState>{
     let take_screenshot_button = Button::from_label(Label::new("Take screen"))
-        .on_click(|ctx:&mut EventCtx,data: &mut AppState,_env: &Env|{
+        .on_click(|ctx:&mut EventCtx, data: &mut AppState, _env: &Env|{
             data.main_window_id = Some(ctx.window_id());
             ctx.submit_command(sys_cmd::HIDE_WINDOW.to(Auto));
             ctx.new_window(WindowDesc::new(build_screenshot_widget())
@@ -106,24 +113,43 @@ fn build_root_widget()-> impl Widget<AppState>{
                                .set_window_state(WindowState::Maximized))
         });
 
-    let img = Reader::open("./src/images/PicWithAlpha.png")
+    let screen_img = Reader::open("./src/images/Pic.jpg")
         .expect("Can't open the screenshot!")
         .decode()
         .expect("Can't decode the screenshot");
-    println!("{} , {} , {}",img.as_bytes().len(),img.width(),img.height());
     let screenshot_image = Image::new(
         ImageBuf::from_raw(
-            Arc::<[u8]>::from(img.as_bytes()), ImageFormat::RgbaSeparate, img.width() as usize, img.height() as usize
+            Arc::<[u8]>::from(screen_img.as_bytes()), ImageFormat::Rgb, screen_img.width() as usize, screen_img.height() as usize
         )
     );
 
-    let layout = Flex::row()
-        .with_child(screenshot_image)
-        .with_child(take_screenshot_button);
-    Align::centered(layout)
+    let zstack_id = WidgetId::next();
+    let zstack = IdentityWrapper::wrap(CustomZStack::new(screenshot_image),zstack_id);
+    //TODO: make the image resizable and movable!
+    let add_img_button = Button::from_label(Label::new("+"))
+        .on_click(move |ctx:&mut EventCtx, _data: &mut AppState, _env: &Env|{
+            //TODO: introduce a switch with meaningful paths containing different images!
+            ctx.submit_command(SHOW_OVER_IMG.with("./src/over_images/red-circle.png").to(Target::Widget(zstack_id.clone())));
+        });
+    let save_img_button = Button::from_label(Label::new("Save"))
+        .on_click(move |ctx:&mut EventCtx, _data: &mut AppState, _env: &Env|{
+            //TODO: use a meaningful name and extension
+            ctx.submit_command(SAVE_OVER_IMG.with((screen_img.clone(), "./src/images/", "modified_screen", image::ImageFormat::Png)));
+        });
+
+    let mut flex = Flex::row();
+    flex.set_must_fill_main_axis(true);
+    flex.add_child(zstack);
+    flex.add_default_spacer();
+    flex.add_flex_child(Container::new(take_screenshot_button),FlexParams::new(1.,CrossAxisAlignment::End));
+    flex.add_child(add_img_button);
+    flex.add_child(save_img_button);
+    flex.set_main_axis_alignment(MainAxisAlignment::Center);
+    let layout = flex.background(Color::SILVER);
+    layout
 }
 
-fn make_menu<T: Data>(_window: Option<WindowId>, _data: &AppState, _env: &Env) -> Menu<T> {
+fn make_menu(_window: Option<WindowId>, _data: &AppState, _env: &Env) -> Menu<AppState> {
     let mut base = Menu::empty();
     #[cfg(target_os = "macos")]
     {
@@ -138,6 +164,7 @@ fn make_menu<T: Data>(_window: Option<WindowId>, _data: &AppState, _env: &Env) -
     {
         base = base.entry(druid::platform_menus::win::file::default());
     }
+    //TODO: implement the menù
     base.entry(
         Menu::new(LocalizedString::new("common-menu-edit-menu"))
             .entry(druid::platform_menus::common::undo())
