@@ -1,7 +1,7 @@
 mod custom_widget;
 
 use std::sync::Arc;
-use druid::widget::{Button, Container, CrossAxisAlignment, Flex, FlexParams, IdentityWrapper, Image, Label, LensWrap, MainAxisAlignment, ZStack};
+use druid::widget::{Button, Container, Flex, IdentityWrapper, Image, Label, LensWrap, MainAxisAlignment, ZStack};
 use druid::{commands as sys_cmd, AppLauncher, Data, Env, Lens, LocalizedString, Widget, WindowDesc, WindowState, Color, Rect, Vec2, UnitPoint, EventCtx, FontDescriptor, FontFamily, WindowId, Menu, ImageBuf, WidgetExt, Target, WidgetId, Selector};
 use druid::piet::{ImageFormat};
 use druid::Target::{Auto};
@@ -51,22 +51,22 @@ fn main() {
 }
 
 fn build_screenshot_widget() -> impl Widget<AppState> {
-    let rectangle = LensWrap::new(SelectedRect::new(),AppState::rect);
+    let rectangle = LensWrap::new(SelectedRect::new(), AppState::rect);
 
     let label = Label::new(|data: &AppState, _env: &Env|
         format!("Resize and drag as you like.\n- Top Left: ({}, {})\n- Bottom Right: ({}, {})",
-                data.rect.x0,data.rect.y0,data.rect.x1,data.rect.y1));
+                data.rect.x0, data.rect.y0, data.rect.x1, data.rect.y1));
 
-    let take_screenshot_button=ColoredButton::from_label(
-        Label::new("Take Screen")
+    let take_screenshot_button = ColoredButton::from_label(
+        Label::new("Take Screenshot")
             .with_text_color(Color::BLACK)
             .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
             .with_text_size(20.)
-    ).with_color(Color::rgb8(70,250,70)
-        .with_alpha(0.40))
-        .on_click(|ctx:&mut EventCtx, _data: &mut AppState, _env: &Env|{
+    )
+        .with_color(Color::rgb8(70, 250, 70).with_alpha(0.40))
+        .on_click(|ctx: &mut EventCtx, _data: &mut AppState, _env: &Env| {
             ctx.submit_command(sys_cmd::HIDE_WINDOW.to(Auto));
-            //TODO: take the screenshot!!
+            // TODO: Take the screenshot!
             ctx.submit_command(sys_cmd::SHOW_WINDOW.to(Auto));
         });
 
@@ -75,11 +75,11 @@ fn build_screenshot_widget() -> impl Widget<AppState> {
             .with_text_color(Color::BLACK)
             .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
             .with_text_size(20.)
-    ).with_color(Color::rgb8(250, 70, 70)
-        .with_alpha(0.40))
-        .on_click(|ctx:&mut EventCtx, data: &mut AppState, _env: &Env|{
+    )
+        .with_color(Color::rgb8(250, 70, 70).with_alpha(0.40))
+        .on_click(|ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
             let main_id = data.main_window_id
-                .expect("How did you opened this window?");
+                .expect("How did you open this window?");
             ctx.get_external_handle().submit_command(sys_cmd::SHOW_WINDOW, (), main_id)
                 .expect("Error sending the event");
             ctx.window().close();
@@ -90,17 +90,18 @@ fn build_screenshot_widget() -> impl Widget<AppState> {
         .with_default_spacer()
         .with_child(close_button);
 
-    let mut label_container =  Container::new(label);
-    label_container.set_background(Color::BLACK.with_alpha(0.35));
+    let label_container = Container::new(label)
+        .background(Color::BLACK.with_alpha(0.35));
 
     let zstack = ZStack::new(rectangle)
-        .with_child(label_container,Vec2::new(1.0, 1.0),Vec2::ZERO, UnitPoint::LEFT,Vec2::new(10.0, 0.0))
-        .with_child(buttons_flex,Vec2::new(1.0, 1.0),Vec2::ZERO, UnitPoint::BOTTOM_RIGHT,Vec2::new(-100.0, -100.0));
+        .with_child(label_container, Vec2::new(1.0, 1.0), Vec2::ZERO, UnitPoint::LEFT, Vec2::new(10.0, 0.0))
+        .with_child(buttons_flex, Vec2::new(1.0, 1.0), Vec2::ZERO, UnitPoint::BOTTOM_RIGHT, Vec2::new(-100.0, -100.0));
+
     zstack
 }
 
 fn build_root_widget()-> impl Widget<AppState>{
-    let take_screenshot_button = Button::from_label(Label::new("Take screen"))
+    let take_screenshot_button = Button::from_label(Label::new("Take Screenshoot"))
         .on_click(|ctx:&mut EventCtx, data: &mut AppState, _env: &Env|{
             data.main_window_id = Some(ctx.window_id());
             ctx.submit_command(sys_cmd::HIDE_WINDOW.to(Auto));
@@ -125,25 +126,32 @@ fn build_root_widget()-> impl Widget<AppState>{
 
     let zstack_id = WidgetId::next();
     let zstack = IdentityWrapper::wrap(CustomZStack::new(screenshot_image),zstack_id);
-    //TODO: make the image resizable and movable!
-    let add_img_button = Button::from_label(Label::new("+"))
-        .on_click(move |ctx:&mut EventCtx, _data: &mut AppState, _env: &Env|{
-            //TODO: introduce a switch with meaningful paths containing different images!
-            ctx.submit_command(SHOW_OVER_IMG.with("./src/over_images/red-circle.png").to(Target::Widget(zstack_id.clone())));
-        });
-    let save_img_button = Button::from_label(Label::new("Save"))
-        .on_click(move |ctx:&mut EventCtx, _data: &mut AppState, _env: &Env|{
-            //TODO: use a meaningful name and extension
-            ctx.submit_command(SAVE_OVER_IMG.with((screen_img.clone(), "./src/images/", "modified_screen", image::ImageFormat::Png)));
-        });
+    let spaced_zstack = Container::new(zstack).padding((10.0, 0.0));
 
-    let mut flex = Flex::row();
-    flex.set_must_fill_main_axis(true);
-    flex.add_child(zstack);
+    //TODO: make the image resizable and movable!
+    let buttons_bar = Flex::row()
+        .with_default_spacer()
+        .with_child(Button::from_label(Label::new("Circle"))
+            .on_click(move |ctx:&mut EventCtx, _data: &mut AppState, _env: &Env|{
+                // TODO: introduce a switch with meaningful paths containing different images!
+                ctx.submit_command(SHOW_OVER_IMG.with("./src/over_images/red-circle.png").to(Target::Widget(zstack_id)));
+            }))
+        .with_default_spacer()
+        .with_child(Button::from_label(Label::new("Save"))
+            .on_click(move |ctx:&mut EventCtx, _data: &mut AppState, _env: &Env|{
+                // TODO: use a meaningful name and extension
+                ctx.submit_command(SAVE_OVER_IMG.with((screen_img.clone(), "./src/images/", "modified_screen", image::ImageFormat::Png)));
+            }))
+        .with_default_spacer()
+        .with_flex_child(Container::new(take_screenshot_button), 1.0);
+
+    let mut flex = Flex::column();
     flex.add_default_spacer();
-    flex.add_flex_child(Container::new(take_screenshot_button),FlexParams::new(1.,CrossAxisAlignment::End));
-    flex.add_child(add_img_button);
-    flex.add_child(save_img_button);
+    flex.add_child(buttons_bar);
+    flex.add_default_spacer();
+    flex.set_must_fill_main_axis(true);
+    flex.add_child(spaced_zstack);
+    flex.add_default_spacer();
     flex.set_main_axis_alignment(MainAxisAlignment::Center);
     let layout = flex.background(Color::SILVER);
     layout

@@ -1,7 +1,7 @@
 use tracing::{instrument, warn};
 
 use druid::widget::prelude::*;
-use druid::{Cursor, Monitor, MouseEvent, Point, Rect, Screen, theme};
+use druid::{Cursor, MouseEvent, Point, Rect, Screen, theme};
 use druid::piet::{LineJoin, StrokeStyle};
 
 ///the distance in pixels from the SelectedRegion borders where a click is relevated
@@ -32,8 +32,9 @@ impl SelectedRect {
     /// Construct SelectedRegion with coordinates set.
     pub fn new() -> Self {
         //TODO : select the screen in a multi-monitor context!
+
         let primary_monitor_rect = Screen::get_monitors()
-            .into_iter().filter(|m|m.is_primary()).collect::<Vec<Monitor>>()
+            //.into_iter().filter(|m|m.is_primary()).collect::<Vec<Monitor>>()          // there is an error when take screenshoot is clicked
             .first().expect("No primary monitor found!")
             .virtual_rect();
         Self {
@@ -176,7 +177,7 @@ impl Widget<Rect> for SelectedRect {
         }
         //Validity check: inside the monitor size
         let primary_monitor_rect = Screen::get_monitors()
-            .into_iter().filter(|m|m.is_primary()).collect::<Vec<Monitor>>()
+            //.into_iter().filter(|m|m.is_primary()).collect::<Vec<Monitor>>()
             .first().expect("No primary monitor found!")
             .virtual_rect();
         if self.rect.x0<primary_monitor_rect.x0{
