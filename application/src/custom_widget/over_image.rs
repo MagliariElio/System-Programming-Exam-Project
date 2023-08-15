@@ -1,14 +1,19 @@
 //! Please consider using SVG and the SVG widget as it scales much better.
 
-use druid::{kurbo::Rect, piet::{Image as _, ImageBuf, InterpolationMode, PietImage}, widget::prelude::*, Data, MouseEvent, Point, Cursor, Screen, Monitor};
 use druid::piet::ImageFormat;
 use druid::widget::FillStrat;
+use druid::{
+    kurbo::Rect,
+    piet::{Image as _, ImageBuf, InterpolationMode, PietImage},
+    widget::prelude::*,
+    Cursor, Data, Monitor, MouseEvent, Point, Screen,
+};
+use image::imageops::{resize, FilterType};
+use image::RgbaImage;
 use tracing::{instrument, trace};
-use image::{RgbaImage};
-use image::imageops::{FilterType, resize};
 
-const DISTANCE_MARGIN:f64 = 10.0;
-const BORDER_WIDTH:f64 = 5.0;
+const DISTANCE_MARGIN: f64 = 10.0;
+const BORDER_WIDTH: f64 = 5.0;
 
 #[derive(Copy, Clone, PartialEq)]
 enum IfMousePressedWhere {
@@ -21,7 +26,7 @@ enum IfMousePressedWhere {
     West,
     NorthWest,
     Inside(Point),
-    NotInterested
+    NotInterested,
 }
 
 /// A widget that renders a bitmap Image.
@@ -171,7 +176,7 @@ impl OverImage {
             .unwrap_or_else(|| self.image_data.size())
     }
 
-    fn where_mouse_is(self: &mut Self, me:&MouseEvent) -> IfMousePressedWhere {
+    fn where_mouse_is(self: &mut Self, me: &MouseEvent) -> IfMousePressedWhere {
         let pos = me.pos.clone();
         let x0 = 0.;
         let x1 = self.image_size().width;
@@ -197,11 +202,15 @@ impl OverImage {
             IfMousePressedWhere::North
         } else if f64::abs(pos.y.clone() - y1) < DISTANCE_MARGIN {
             IfMousePressedWhere::South
-        } else if pos.y.clone() > y0 && pos.y.clone() < y1 && pos.x.clone() > x0 && pos.x.clone() < x1 {
+        } else if pos.y.clone() > y0
+            && pos.y.clone() < y1
+            && pos.x.clone() > x0
+            && pos.x.clone() < x1
+        {
             IfMousePressedWhere::Inside(pos)
         } else {
             IfMousePressedWhere::NotInterested
-        }
+        };
     }
 }
 
@@ -215,7 +224,8 @@ impl<T: Data> Widget<T> for OverImage {
                 self.mouse = self.where_mouse_is(me);
             }
             Event::MouseMove(me) => {
-                if self.mouse != IfMousePressedWhere::NotInterested{ //if the mouse has been pressed
+                if self.mouse != IfMousePressedWhere::NotInterested {
+                    //if the mouse has been pressed
                     let pos = me.pos.clone();
                     match self.mouse {
                         IfMousePressedWhere::Est => {
@@ -230,7 +240,8 @@ impl<T: Data> Widget<T> for OverImage {
                         }
                         _ => {}
                     }
-                } else { //the mouse has not been pressed
+                } else {
+                    //the mouse has not been pressed
                     match self.where_mouse_is(me) {
                         IfMousePressedWhere::Est => {
                             ctx.override_cursor(&Cursor::ResizeLeftRight);
@@ -241,11 +252,11 @@ impl<T: Data> Widget<T> for OverImage {
                         IfMousePressedWhere::South => {
                             ctx.override_cursor(&Cursor::ResizeUpDown);
                         }
-                        _ => ctx.clear_cursor()
+                        _ => ctx.clear_cursor(),
                     }
                 }
             }
-            Event::MouseUp(_)=>{
+            Event::MouseUp(_) => {
                 self.mouse = IfMousePressedWhere::NotInterested;
                 ctx.set_active(false);
             }
@@ -253,37 +264,55 @@ impl<T: Data> Widget<T> for OverImage {
         }
         //Keeps validity
 
-        while image_size.x1.clone()<=image_size.x0.clone()+BORDER_WIDTH{
-            image_size.x1 += 1.+BORDER_WIDTH;
-            image_size.x0 -= 1.+BORDER_WIDTH;
+        while image_size.x1.clone() <= image_size.x0.clone() + BORDER_WIDTH {
+            image_size.x1 += 1. + BORDER_WIDTH;
+            image_size.x0 -= 1. + BORDER_WIDTH;
         }
-        while image_size.y1.clone()<=image_size.y0.clone()+BORDER_WIDTH{
-            image_size.y1 += 1.+BORDER_WIDTH;
-            image_size.y0 -= 1.+BORDER_WIDTH;
+        while image_size.y1.clone() <= image_size.y0.clone() + BORDER_WIDTH {
+            image_size.y1 += 1. + BORDER_WIDTH;
+            image_size.y0 -= 1. + BORDER_WIDTH;
         }
         //Validity check: inside the monitor size
         let primary_monitor_rect = Screen::get_monitors()
-            .into_iter().filter(|m|m.is_primary()).collect::<Vec<Monitor>>()
-            .first().expect("No primary monitor found!")
+            .into_iter()
+            .filter(|m| m.is_primary())
+            .collect::<Vec<Monitor>>()
+            .first()
+            .expect("No primary monitor found!")
             .virtual_rect();
-        if image_size.x0< primary_monitor_rect.x0{
+        if image_size.x0 < primary_monitor_rect.x0 {
             image_size.x0 = primary_monitor_rect.x0;
         }
-        if image_size.y0< primary_monitor_rect.y0{
+        if image_size.y0 < primary_monitor_rect.y0 {
             image_size.y0 = primary_monitor_rect.y0;
         }
-        if image_size.x1> primary_monitor_rect.x1{
-            image_size.x1 = primary_monitor_rect.x1-BORDER_WIDTH;
+        if image_size.x1 > primary_monitor_rect.x1 {
+            image_size.x1 = primary_monitor_rect.x1 - BORDER_WIDTH;
         }
-        if image_size.y1> primary_monitor_rect.y1{
-            image_size.y1 = primary_monitor_rect.y1-BORDER_WIDTH;
+        if image_size.y1 > primary_monitor_rect.y1 {
+            image_size.y1 = primary_monitor_rect.y1 - BORDER_WIDTH;
         }
-        let img = RgbaImage::from_raw(self.image_data.width() as u32, self.image_data.height() as u32, self.image_data.raw_pixels().to_vec())
-            .expect("Can't convert the image from Druid to Image crate");
-        let resized_img = resize(&img, image_size.width() as u32, image_size.height() as u32, FilterType::Nearest);
-        let width = resized_img.width() as usize; let height = resized_img.height() as usize;
-        self.image_data = ImageBuf::from_raw(resized_img.into_raw(), ImageFormat::RgbaSeparate, width, height);
-        println!("{}",self.image_data.width());
+        let img = RgbaImage::from_raw(
+            self.image_data.width() as u32,
+            self.image_data.height() as u32,
+            self.image_data.raw_pixels().to_vec(),
+        )
+        .expect("Can't convert the image from Druid to Image crate");
+        let resized_img = resize(
+            &img,
+            image_size.width() as u32,
+            image_size.height() as u32,
+            FilterType::Nearest,
+        );
+        let width = resized_img.width() as usize;
+        let height = resized_img.height() as usize;
+        self.image_data = ImageBuf::from_raw(
+            resized_img.into_raw(),
+            ImageFormat::RgbaSeparate,
+            width,
+            height,
+        );
+        println!("{}", self.image_data.width());
         ctx.request_paint();
         ctx.window().invalidate(/*Rect::new(ctx.window_origin().x,ctx.window_origin().y,ctx.window_origin().x+image_size.x1,ctx.window_origin().y+image_size.y1)*/);
         //*data=self.image_size;
@@ -293,16 +322,16 @@ impl<T: Data> Widget<T> for OverImage {
     fn lifecycle(&mut self, _ctx: &mut LifeCycleCtx, _event: &LifeCycle, _data: &T, _env: &Env) {}
 
     #[instrument(
-    name = "Image",
-    level = "trace",
-    skip(self, _ctx, _old_data, _data, _env)
+        name = "Image",
+        level = "trace",
+        skip(self, _ctx, _old_data, _data, _env)
     )]
     fn update(&mut self, _ctx: &mut UpdateCtx, _old_data: &T, _data: &T, _env: &Env) {}
 
     #[instrument(
-    name = "Image",
-    level = "trace",
-    skip(self, _layout_ctx, bc, _data, _env)
+        name = "Image",
+        level = "trace",
+        skip(self, _layout_ctx, bc, _data, _env)
     )]
     fn layout(
         &mut self,

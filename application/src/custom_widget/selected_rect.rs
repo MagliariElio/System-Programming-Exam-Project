@@ -25,7 +25,8 @@ enum IfMousePressedWhere {
 #[derive(Clone)]
 pub struct SelectedRect {
     rect: Rect,
-    mouse: IfMousePressedWhere
+    mouse: IfMousePressedWhere,
+    show_overlay: bool
 }
 
 impl SelectedRect {
@@ -37,6 +38,11 @@ impl SelectedRect {
             //.into_iter().filter(|m|m.is_primary()).collect::<Vec<Monitor>>()          // there is an error when take screenshoot is clicked
             .first().expect("No primary monitor found!")
             .virtual_rect();
+
+        println!("{:?}", Screen::get_monitors()
+            //.into_iter().filter(|m|m.is_primary()).collect::<Vec<Monitor>>()          // there is an error when take screenshoot is clicked
+            .first().expect("No primary monitor found!"));
+
         Self {
             rect: Rect{
                 x0 : primary_monitor_rect.x0,
@@ -45,6 +51,7 @@ impl SelectedRect {
                 y1 : primary_monitor_rect.y1,
             },
             mouse: IfMousePressedWhere::NotInterested,
+            show_overlay: false
         }
     }
 
@@ -89,6 +96,7 @@ impl Widget<Rect> for SelectedRect {
             Event::MouseDown(me) => {
                 ctx.set_active(true);
                 self.mouse = self.where_mouse_is(me);
+                self.show_overlay = true;
             }
             Event::MouseMove(me) => {
                 if self.mouse != IfMousePressedWhere::NotInterested{ //if the mouse has been pressed
@@ -128,6 +136,7 @@ impl Widget<Rect> for SelectedRect {
                             self.rect.x0 += pos.x.clone() - old_pos.x.clone();
                             self.rect.x1 += pos.x.clone() - old_pos.x;
                             self.mouse = IfMousePressedWhere::Inside(pos);
+                            self.show_overlay = true;
                         }
                     }
                 } else { //the mouse has not been pressed
@@ -163,6 +172,7 @@ impl Widget<Rect> for SelectedRect {
             Event::MouseUp(_)=>{
                 self.mouse = IfMousePressedWhere::NotInterested;
                 ctx.set_active(false);
+                self.show_overlay = false;
             }
             _ => (),
         }
@@ -214,31 +224,40 @@ impl Widget<Rect> for SelectedRect {
     #[instrument(name = "SelectedRegion", level = "trace", skip(self, _ctx, bc, _data, _env))]
     fn layout(&mut self, _ctx: &mut LayoutCtx, bc: &BoxConstraints, _data: &Rect, _env: &Env) -> Size {
         bc.debug_check("SelectedRegion");
+        let overlay_padding = if self.show_overlay { 0.0 } else { BORDER_WIDTH };
         bc.constrain(Size::new(
-            self.rect.x1.clone()-self.rect.x0.clone(),
-            self.rect.y1.clone()-self.rect.y0.clone())
-        )
+            self.rect.x1.clone() - self.rect.x0.clone() + overlay_padding.clone() * 2.0,
+            self.rect.y1.clone() - self.rect.y0.clone() + overlay_padding * 2.0,
+        ))
     }
 
-    #[instrument(name = "SelectedRegion", level = "trace", skip(self, ctx, _data, env))]
-    fn paint(&mut self, ctx: &mut PaintCtx, _data: &Rect, env: &Env) {
-        let rect = Rect{
+
+    #[instrument(name = "SelectedRegion", level = "trace", skip(self, ctx, env))]
+    fn paint(&mut self, ctx: &mut PaintCtx, data: &Rect, env: &Env) {
+        let rect = Rect {
             x0: self.rect.x0.clone(),
             y0: self.rect.y0.clone(),
             x1: self.rect.x1.clone(),
             y1: self.rect.y1.clone(),
         };
+
+        // Draw the overlay
+        let overlay_color = env.get(theme::BACKGROUND_DARK).with_alpha(0.5);
+        ctx.fill(rect, &overlay_color);
+
+        // Draw the selected rectangle border
         let border_color = if ctx.is_hot() && !ctx.is_disabled() {
             env.get(theme::BORDER_DARK)
         } else {
             env.get(theme::BORDER_LIGHT)
         };
         let style: StrokeStyle = StrokeStyle::new()
-            .dash_pattern(&[12.0,7.0])
+            .dash_pattern(&[12.0, 7.0])
             .line_join(LineJoin::Round)
             .line_cap(Default::default())
             .dash_offset(0.0);
         ctx.stroke_styled(rect, &border_color, BORDER_WIDTH, &style);
     }
+
 
 }
