@@ -62,6 +62,8 @@ fn main() {
         .expect("Failed to launch application");
 }
 
+
+
 fn build_screenshot_widget() -> impl Widget<AppState> {
     let rectangle = LensWrap::new(SelectedRect::new(), AppState::rect);
 
@@ -121,6 +123,8 @@ fn build_screenshot_widget() -> impl Widget<AppState> {
     zstack
 }
 
+
+
 fn build_root_widget() -> impl Widget<AppState> {
     let screenshot_widget_id = WidgetId::next();
     let take_screenshot_button = Button::from_label(Label::new("Take Screenshoot")).on_click(
@@ -170,7 +174,7 @@ fn build_root_widget() -> impl Widget<AppState> {
                 // TODO: introduce a switch with meaningful paths containing different images!
                 ctx.submit_command(
                     SHOW_OVER_IMG
-                        .with("./src/over_images/red-circle.png")
+                        .with("./src/images/icons/red-circle.png")
                         .to(Target::Widget(zstack_id)),
                 );
             },
@@ -180,7 +184,7 @@ fn build_root_widget() -> impl Widget<AppState> {
             move |ctx: &mut EventCtx, _data: &mut AppState, _env: &Env| {
                 ctx.submit_command(
                     SHOW_OVER_IMG
-                        .with("./src/over_images/red-circle.png")
+                        .with("./src/images/icons/triangle.png")
                         .to(Target::Widget(zstack_id)),
                 );
             },
@@ -190,10 +194,10 @@ fn build_root_widget() -> impl Widget<AppState> {
             move |ctx: &mut EventCtx, _data: &mut AppState, _env: &Env| {
                 ctx.submit_command(
                     SHOW_OVER_IMG
-                        .with("./src/over_images/red-circle.png")
+                        .with("./src/images/icons/red-circle.png")
                         .to(Target::Widget(zstack_id)),
                 );
-            },
+            }
         ))
         .with_default_spacer()
         .with_child(Button::from_label(Label::new("Save")).on_click(
