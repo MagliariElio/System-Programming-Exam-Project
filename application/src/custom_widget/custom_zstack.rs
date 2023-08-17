@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use druid::{BoxConstraints, Data, Env, Event, EventCtx, InternalEvent, LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx, Point, Rect, Size, UnitPoint, UpdateCtx, Vec2, Widget, WidgetExt, WidgetPod, ImageBuf};
 use druid::piet::ImageFormat;
-use druid::widget::{Image};
+use druid::widget::{Image, SizedBox};
 use image::{DynamicImage, GenericImage, GenericImageView, Pixel};
 use image::imageops::FilterType;
 use image::io::Reader;
@@ -93,9 +93,9 @@ impl <T: Data> CustomZStack<T>  {
     pub fn show_over_img(self: &mut Self, open_path: &'static str) -> bool{
         if self.over_img.is_none() {
             let img = Reader::open(open_path).unwrap().decode().unwrap();
-            let over_image = Image::new(ImageBuf::from_raw(
+            let over_image = SizedBox::new(Image::new(ImageBuf::from_raw(
                 Arc::<[u8]>::from(img.as_bytes()), ImageFormat::RgbaSeparate, img.width() as usize, img.height() as usize
-            ));
+            ))).expand().border(druid::Color::BLACK,2.);
             self.with_child(over_image, Vec2::new(1., 1.), Vec2::ZERO, UnitPoint::CENTER, Vec2::new(5., 5.))
                 .over_img = Some(img);
             true
@@ -164,7 +164,7 @@ impl <T: Data> CustomZStack<T>  {
             self.back_img = Some(out);
             true
         } else {
-            false
+           panic!("trying to add 2 over-img");
         }
     }
 }
