@@ -1,8 +1,11 @@
+use std::fs;
 use druid::debug_state::DebugState;
 use druid::widget::prelude::*;
 use druid::widget::{Click, ControllerHost, Label, LabelText};
-use druid::{theme, Affine, Data, Insets, LinearGradient, UnitPoint, Color};
+use druid::{commands as sys_cmd, theme, Affine, Data, Insets, LinearGradient, UnitPoint, Color, Rect, WindowId};
+use screenshots::{Compression, Screen};
 use tracing::{instrument, trace};
+use crate::{SAVE_SCREENSHOT, SCREENSHOT_PATH, UPDATE_SCREENSHOT};
 
 // the minimum padding added to a button.
 // NOTE: these values are chosen to match the existing look of TextBox; these
@@ -10,14 +13,15 @@ use tracing::{instrument, trace};
 const LABEL_INSETS: Insets = Insets::uniform_xy(8., 2.);
 
 /// A button with a text label.
-pub struct ColoredButton<T> {
+pub struct TakeScreenshotButton<T> {
     label: Label<T>,
     label_size: Size,
-    color: Option<Color>
+    color: Option<Color>,
+    taking_screenshot: Option<(Rect,WindowId,WidgetId,&'static str)>
 }
 
 #[allow(dead_code)]
-impl<T: Data> ColoredButton<T> {
+impl<T: Data> TakeScreenshotButton<T> {
     /// Create a new button with a text label.
     ///
     /// Use the [`on_click`] method to provide a closure to be called when the
@@ -34,8 +38,8 @@ impl<T: Data> ColoredButton<T> {
     /// ```
     ///
     /// [`on_click`]: #method.on_click
-    pub fn new(text: impl Into<LabelText<T>>) -> ColoredButton<T> {
-        ColoredButton::from_label(Label::new(text))
+    pub fn new(text: impl Into<LabelText<T>>) -> TakeScreenshotButton<T> {
+        TakeScreenshotButton::from_label(Label::new(text))
     }
 
     /// Create a new button with the provided [`Label`].
@@ -55,11 +59,12 @@ impl<T: Data> ColoredButton<T> {
     /// ```
     ///
     /// [`on_click`]: #method.on_click
-    pub fn from_label(label: Label<T>) -> ColoredButton<T> {
-        ColoredButton {
+    pub fn from_label(label: Label<T>) -> TakeScreenshotButton<T> {
+        TakeScreenshotButton {
             label,
             label_size: Size::ZERO,
             color: None,
+            taking_screenshot: None,
         }
     }
 
@@ -85,7 +90,7 @@ impl<T: Data> ColoredButton<T> {
     /// [`new`]: #method.new
     pub fn dynamic(text: impl Fn(&T, &Env) -> String + 'static) -> Self {
         let text: LabelText<T> = text.into();
-        ColoredButton::new(text)
+        TakeScreenshotButton::new(text)
     }
 
     /// Provide a closure to be called when this button is clicked.
@@ -100,15 +105,39 @@ impl<T: Data> ColoredButton<T> {
         Self{
             label:self.label,
             label_size:self.label_size,
-            color:Some(color)
+            color:Some(color),
+            taking_screenshot: self.taking_screenshot,
         }
     }
 }
 
-impl<T: Data> Widget<T> for ColoredButton<T> {
+impl<T: Data> Widget<T> for TakeScreenshotButton<T> {
     #[instrument(name = "Button", level = "trace", skip(self, ctx, event, _data, _env))]
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, _data: &mut T, _env: &Env) {
+
+        if self.taking_screenshot.is_some(){
+            let (rect,main_window_id,screenshot_id,path) = self.taking_screenshot.unwrap();
+            self.taking_screenshot = None;
+            save_screenshot(&rect,path);
+            let main_id = main_window_id;
+            ctx.get_external_handle()
+                .submit_command(sys_cmd::SHOW_WINDOW, (), main_id)
+                .expect("Error sending the event to the window");
+            ctx.get_external_handle()
+                .submit_command(UPDATE_SCREENSHOT, SCREENSHOT_PATH, screenshot_id)
+                .expect("Error sending the event to the screenshot widget");
+            ctx.window().close();
+        }
+
         match event {
+            Event::Command(cmd) => {
+                if cmd.is(SAVE_SCREENSHOT) {
+                    ctx.window().hide();
+                    let (rect,main_window_id,screenshot_id,path) = cmd.get_unchecked(SAVE_SCREENSHOT);
+                    self.taking_screenshot = Some((*rect,*main_window_id,*screenshot_id,*path));
+                    ctx.request_layout();
+                }
+            }
             Event::MouseDown(_) => {
                 if !ctx.is_disabled() {
                     ctx.set_active(true);
@@ -228,4 +257,30 @@ impl<T: Data> Widget<T> for ColoredButton<T> {
             ..Default::default()
         }
     }
+}
+
+
+fn save_screenshot(rect: &Rect, path: &str){
+    //TODO:
+    /* READ THIS TO IMPLEMENT MULTI-SCREEN GRABBING
+    let screens = Screen::all().unwrap();
+
+    for screen in screens {
+        println!("capturer {screen:?}");
+        let mut image = screen.capture().unwrap();
+        let mut buffer = image.to_png(Compression::Best).unwrap();
+        fs::write(format!("./src/screenshots/{}.png", screen.display_info.id), buffer).unwrap();
+
+        image = screen.capture_area(rect.x0 as i32, rect.y0 as i32, rect.width() as u32, rect.height() as u32).unwrap();
+        buffer = image.to_png(None).unwrap();
+        fs::write(format!("./src/screenshots/{}-2.png", screen.display_info.id), buffer).unwrap();
+    }
+    */
+
+    let screen = Screen::from_point(rect.x0 as i32, rect.y0 as i32).unwrap();
+    println!("capturer {screen:?}");
+
+    let image = screen.capture_area(rect.x0 as i32, rect.y0 as i32, rect.width() as u32, rect.height() as u32).unwrap();
+    let buffer = image.to_png(Compression::Fast).unwrap();
+    fs::write(path, buffer).unwrap();
 }

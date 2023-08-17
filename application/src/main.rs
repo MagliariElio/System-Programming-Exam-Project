@@ -1,16 +1,12 @@
 mod custom_widget;
 
-use crate::custom_widget::{ColoredButton, CustomZStack, SelectedRect};
+use crate::custom_widget::{ColoredButton, CustomZStack, ScreenshotImage, SelectedRect, TakeScreenshotButton};
 use druid::piet::ImageFormat;
 use druid::widget::{
-    Button, Container, Flex, IdentityWrapper, Image, Label, LensWrap, MainAxisAlignment, ZStack,
+    Button, Container, Flex, IdentityWrapper, Label, LensWrap, MainAxisAlignment, ZStack,
 };
 use druid::Target::Auto;
-use druid::{
-    commands as sys_cmd, AppLauncher, Color, Data, Env, EventCtx, FontDescriptor, FontFamily,
-    ImageBuf, Lens, LocalizedString, Menu, Rect, Selector, Target, UnitPoint, Vec2, Widget,
-    WidgetExt, WidgetId, WindowDesc, WindowId, WindowState,
-};
+use druid::{commands as sys_cmd, AppLauncher, Color, Data, Env, EventCtx, FontDescriptor, FontFamily, ImageBuf, Lens, LocalizedString, Menu, Rect, Selector, Target, UnitPoint, Vec2, Widget, WidgetExt, WidgetId, WindowDesc, WindowId, WindowState};
 use image::io::Reader;
 use image::DynamicImage;
 use std::sync::Arc;
@@ -19,10 +15,16 @@ use std::sync::Arc;
 //TODO: Set the error messages everywhere they need!
 //TODO: Make the main page GUI beautiful
 
+const SCREENSHOT_PATH: &'static str = "./src/screenshots/screenshot.png";
+
+pub const SAVE_SCREENSHOT: Selector<(Rect,WindowId,WidgetId,&'static str)> = Selector::new("Save the screenshot image");
+pub const UPDATE_SCREENSHOT: Selector<&'static str> = Selector::new("Update the screenshot image");
 pub const SHOW_OVER_IMG: Selector<&'static str> =
     Selector::new("Tell the ZStack to show the over_img, params: over_img path");
 pub const SAVE_OVER_IMG: Selector<(DynamicImage ,&'static str, &str, image::ImageFormat)> = Selector::new("Tell the ZStack to save the modified screenshot, params: (Screenshot original img, Folder Path Where To Save, New File Name, Image Format)");
+
 const WINDOW_TITLE: LocalizedString<AppState> = LocalizedString::new("Screen Grabbing Application");
+
 const X0: f64 = 0.;
 const Y0: f64 = 0.;
 const X1: f64 = 1920.; // 1000.
@@ -33,6 +35,8 @@ struct AppState {
     rect: Rect,
     #[data(ignore)]
     main_window_id: Option<WindowId>,
+    #[data(ignore)]
+    screenshot_id: Option<WidgetId>,
 }
 
 fn main() {
@@ -49,6 +53,7 @@ fn main() {
             y1: Y1,
         },
         main_window_id: None,
+        screenshot_id: None,
     };
 
     // start the application
@@ -64,24 +69,27 @@ fn build_screenshot_widget() -> impl Widget<AppState> {
     format!("Resize and drag as you like.\n- Top Left: ({}, {})\n- Bottom Right: ({}, {})",
             data.rect.x0, data.rect.y0, data.rect.x1, data.rect.y1));*/
 
-    let take_screenshot_button = ColoredButton::from_label(
+    let take_screenshot_button = TakeScreenshotButton::from_label(
         Label::new("Take Screenshot")
             .with_text_color(Color::BLACK)
             .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
             .with_text_size(20.),
     )
     .with_color(Color::rgb8(70, 250, 70).with_alpha(1.))
-    .on_click(|ctx: &mut EventCtx, _data: &mut AppState, _env: &Env| {
-        ctx.submit_command(sys_cmd::HIDE_WINDOW.to(Auto));
-        // TODO: Take the screenshot!
-        ctx.submit_command(sys_cmd::SHOW_WINDOW.to(Auto));
+    .on_click(|ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
+        ctx.submit_command(SAVE_SCREENSHOT.with((
+            data.rect,
+            data.main_window_id.expect("How did you open this window?"),
+            data.screenshot_id.expect("How did you open this window?"),
+            SCREENSHOT_PATH
+        )).to(Target::Widget(ctx.widget_id())));
     });
 
     let close_button = ColoredButton::from_label(
         Label::new("Close")
             .with_text_color(Color::BLACK)
             .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
-            .with_text_size(20.),
+            .with_text_size(20.)
     )
     .with_color(Color::rgb8(250, 70, 70).with_alpha(1.))
     .on_click(|ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
@@ -114,9 +122,11 @@ fn build_screenshot_widget() -> impl Widget<AppState> {
 }
 
 fn build_root_widget() -> impl Widget<AppState> {
+    let screenshot_widget_id = WidgetId::next();
     let take_screenshot_button = Button::from_label(Label::new("Take Screenshoot")).on_click(
-        |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
+        move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
             data.main_window_id = Some(ctx.window_id());
+            data.screenshot_id = Some(screenshot_widget_id.clone());
             ctx.submit_command(sys_cmd::HIDE_WINDOW.to(Auto));
             ctx.new_window(
                 WindowDesc::new(build_screenshot_widget())
@@ -129,17 +139,24 @@ fn build_root_widget() -> impl Widget<AppState> {
             )
         },
     );
-
-    let screen_img = Reader::open("./src/images/Pic.jpg")
-        .expect("Can't open the screenshot!")
-        .decode()
-        .expect("Can't decode the screenshot");
-    let screenshot_image = Image::new(ImageBuf::from_raw(
-        Arc::<[u8]>::from(screen_img.as_bytes()),
-        ImageFormat::Rgb,
-        screen_img.width() as usize,
-        screen_img.height() as usize,
-    ));
+    let screenshot_image = IdentityWrapper::wrap(
+        ScreenshotImage::new(ImageBuf::from_raw(
+            Arc::<[u8]>::from(Vec::new().as_slice()),
+            ImageFormat::RgbaSeparate,
+            0 as usize,
+            0 as usize,
+        )).on_added(|img, _ctx,_data:&AppState, _env|{
+            let screen_img = Reader::open(SCREENSHOT_PATH)
+                .expect("Can't open the screenshot!")
+                .decode()
+                .expect("Can't decode the screenshot");
+            img.set_image_data(ImageBuf::from_raw(
+                Arc::<[u8]>::from(screen_img.as_bytes()),
+                ImageFormat::RgbaSeparate,
+                screen_img.width() as usize,
+                screen_img.height() as usize,
+            ));
+        }),screenshot_widget_id);
 
     let zstack_id = WidgetId::next();
     let zstack = IdentityWrapper::wrap(CustomZStack::new(screenshot_image), zstack_id);
@@ -180,14 +197,21 @@ fn build_root_widget() -> impl Widget<AppState> {
         ))
         .with_default_spacer()
         .with_child(Button::from_label(Label::new("Save")).on_click(
-            move |ctx: &mut EventCtx, _data: &mut AppState, _env: &Env| {
+            move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
                 // TODO: use a meaningful name and extension
+                let screen_img = Reader::open(SCREENSHOT_PATH)
+                    .expect("Can't open the screenshot!")
+                    .decode()
+                    .expect("Can't decode the screenshot");
                 ctx.submit_command(SAVE_OVER_IMG.with((
-                    screen_img.clone(),
+                    screen_img,
                     "./src/images/",
-                    "modified_screen",
+                    "screenshot.png",
                     image::ImageFormat::Png,
                 )));
+                if data.screenshot_id.is_some() {
+                    ctx.submit_command(UPDATE_SCREENSHOT.with(SCREENSHOT_PATH).to(data.screenshot_id.unwrap()));
+                }
             },
         ))
         .with_default_spacer()
