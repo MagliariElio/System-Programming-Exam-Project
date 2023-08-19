@@ -1,11 +1,13 @@
 use std::sync::Arc;
-use druid::{BoxConstraints, Data, Env, Event, EventCtx, InternalEvent, LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx, Point, Rect, Size, UnitPoint, UpdateCtx, Vec2, Widget, WidgetExt, WidgetPod, ImageBuf};
+use druid::{BoxConstraints, Data, Env, Event, EventCtx, InternalEvent, LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx, Point, Rect, Size, UnitPoint, UpdateCtx, Vec2, Widget, WidgetExt, WidgetPod, ImageBuf, WidgetId};
 use druid::piet::ImageFormat;
-use druid::widget::{Image, SizedBox};
+use druid::widget::{Image};
 use image::{DynamicImage, GenericImage, GenericImageView, Pixel};
 use image::imageops::FilterType;
 use image::io::Reader;
 use crate::{SAVE_OVER_IMG, SHOW_OVER_IMG};
+use crate::custom_widget::resizable_box::UPDATE_ORIGIN;
+use crate::custom_widget::ResizableBox;
 
 /// A container that stacks its children on top of each other.
 ///
@@ -15,6 +17,7 @@ pub struct CustomZStack<T> {
     layers: Vec<ZChild<T>>,
     over_img: Option<DynamicImage>,
     back_img: Option<DynamicImage>,
+    back_img_origin: Option<Point>
 }
 
 struct ZChild<T> {
@@ -40,6 +43,7 @@ impl <T: Data> CustomZStack<T>  {
             }],
             over_img: None,
             back_img: None,
+            back_img_origin: None,
         }
     }
 
@@ -90,17 +94,18 @@ impl <T: Data> CustomZStack<T>  {
         self.layers.remove(0)
     }
 
-    pub fn show_over_img(self: &mut Self, open_path: &'static str) -> bool{
+    pub fn show_over_img(self: &mut Self, open_path: &'static str, id: WidgetId){
         if self.over_img.is_none() {
             let img = Reader::open(open_path).unwrap().decode().unwrap();
-            let over_image = SizedBox::new(Image::new(ImageBuf::from_raw(
+            let over_image = ResizableBox::new(Image::new(ImageBuf::from_raw(
                 Arc::<[u8]>::from(img.as_bytes()), ImageFormat::RgbaSeparate, img.width() as usize, img.height() as usize
-            ))).expand().border(druid::Color::BLACK,2.);
+            )),id).height(50.).width(50.);
             self.with_child(over_image, Vec2::new(1., 1.), Vec2::ZERO, UnitPoint::CENTER, Vec2::new(5., 5.))
                 .over_img = Some(img);
-            true
         } else {
-            false
+            //TODO: remove the over-image!
+            self.rm_child();
+            self.over_img = None;
         }
     }
     ///return true if has correctly save, false otherwise
@@ -164,7 +169,7 @@ impl <T: Data> CustomZStack<T>  {
             self.back_img = Some(out);
             true
         } else {
-           panic!("trying to add 2 over-img");
+           false
         }
     }
 }
@@ -175,7 +180,7 @@ impl<T: Data> Widget<T> for CustomZStack<T> {
             Event::Command(cmd) => {
                 if cmd.is(SHOW_OVER_IMG) {
                     let path = cmd.get_unchecked(SHOW_OVER_IMG);
-                    self.show_over_img(*path);
+                    self.show_over_img(*path, ctx.widget_id());
                 } else if cmd.is(SAVE_OVER_IMG){
                     let (mut back_img,path,file_name,file_format) = cmd.get_unchecked(SAVE_OVER_IMG).clone();
                     if self.back_img.is_none() {
@@ -183,6 +188,9 @@ impl<T: Data> Widget<T> for CustomZStack<T> {
                     } else {
                         self.save_new_img(&mut self.back_img.clone().unwrap(), path, file_name, file_format);
                     }
+                } else if cmd.is(UPDATE_ORIGIN){
+                    let new_origin = cmd.get_unchecked(UPDATE_ORIGIN);
+                    self.back_img_origin = Some(*new_origin);
                 }
                 ctx.children_changed();
                 ctx.request_paint();
@@ -245,9 +253,17 @@ impl<T: Data> Widget<T> for CustomZStack<T> {
         //Set origin for all Layers and calculate paint insets
         let mut paint_rect = Rect::ZERO;
 
-        for layer in self.layers.iter_mut() {
+        let len = self.layers.len();
+        for (i,layer) in self.layers.iter_mut().enumerate() {
             let remaining = base_size - layer.child.layout_rect().size();
-            let origin = layer.resolve_point(remaining);
+            let mut origin = layer.resolve_point(remaining);
+            if self.back_img_origin.is_some() && i==0 && len == 2 {
+                let dif_point = self.back_img_origin.unwrap();
+                origin.x += dif_point.x;
+                origin.y += dif_point.y;
+            }
+
+
             layer.child.set_origin(ctx, origin);
 
             paint_rect = paint_rect.union(layer.child.paint_rect());
@@ -260,7 +276,6 @@ impl<T: Data> Widget<T> for CustomZStack<T> {
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, data: &T, env: &Env) {
-
         //Painters algorithm (Painting back to front)
         for layer in self.layers.iter_mut().rev() {
             layer.child.paint(ctx, data, env);

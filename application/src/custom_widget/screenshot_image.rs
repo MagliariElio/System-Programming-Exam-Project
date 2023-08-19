@@ -1,10 +1,5 @@
 use std::sync::Arc;
-use druid::{
-    kurbo::Rect,
-    piet::{Image as _, ImageBuf, InterpolationMode, PietImage},
-    widget::prelude::*,
-    Data,
-};
+use druid::{kurbo::Rect, piet::{Image as _, ImageBuf, InterpolationMode, PietImage}, widget::prelude::*, Data};
 use druid::piet::ImageFormat;
 use druid::widget::FillStrat;
 use image::io::Reader;
