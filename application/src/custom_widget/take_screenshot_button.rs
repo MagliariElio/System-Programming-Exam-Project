@@ -124,7 +124,7 @@ impl<T: Data> Widget<T> for TakeScreenshotButton<T> {
                 .submit_command(sys_cmd::SHOW_WINDOW, (), main_id)
                 .expect("Error sending the event to the window");
             ctx.get_external_handle()
-                .submit_command(UPDATE_SCREENSHOT, SCREENSHOT_PATH, screenshot_id)
+                .submit_command(UPDATE_SCREENSHOT, String::from(SCREENSHOT_PATH), screenshot_id)
                 .expect("Error sending the event to the screenshot widget");
             ctx.window().close();
         }
@@ -278,7 +278,7 @@ fn save_screenshot(rect: &Rect, path: &str){
     */
 
     let screen = Screen::from_point(rect.x0 as i32, rect.y0 as i32).unwrap();
-    println!("capturer {screen:?}");
+    println!("capturer {:?}",screen);
 
     let image = screen.capture_area(rect.x0 as i32, rect.y0 as i32, rect.width() as u32, rect.height() as u32).unwrap();
     let buffer = image.to_png(Compression::Fast).unwrap();

@@ -1,4 +1,4 @@
-//! A widget with predefined size.
+//TODO: bug: the over-image disappear while moving
 
 use druid::debug_state::DebugState;
 use tracing::{instrument, trace, warn};
@@ -46,6 +46,7 @@ pub struct ResizableBox<T> {
     father_id: WidgetId
 }
 
+#[allow(dead_code)]
 impl<T> ResizableBox<T> {
     /// Construct container with child, and both width and height not set.
     pub fn new(child: impl Widget<T> + 'static, father_id: WidgetId) -> Self {
@@ -267,7 +268,7 @@ impl<T: Data> Widget<T> for ResizableBox<T> {
                             self.mouse = IfMousePressedWhere::Inside(pos);
                         }
                     }
-                    /*
+                    /* TODO
                     //Keeps validity
                     while rect.x1 <= rect.x0+BORDER_WIDTH+10.{
                         rect.x1 += 3.+BORDER_WIDTH;
@@ -437,7 +438,6 @@ impl<T: Data> Widget<T> for ResizableBox<T> {
         }
 
         let rect = self.rect.unwrap();
-        println!("{:?}",rect);
         let border_color = Color::BLACK;
 
         let style: StrokeStyle = StrokeStyle::new()

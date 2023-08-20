@@ -8,7 +8,6 @@ use druid::widget::{
 use druid::Target::Auto;
 use druid::{commands as sys_cmd, AppLauncher, Color, Data, Env, EventCtx, FontDescriptor, FontFamily, ImageBuf, Lens, LocalizedString, Menu, Rect, Selector, Target, UnitPoint, Vec2, Widget, WidgetExt, WidgetId, WindowDesc, WindowId, WindowState};
 use image::io::Reader;
-use image::DynamicImage;
 use std::sync::Arc;
 
 //TODO: Must remove a lot of .clone() methods everywhere!
@@ -17,11 +16,11 @@ use std::sync::Arc;
 
 const SCREENSHOT_PATH: &'static str = "./src/screenshots/screenshot.png";
 
-pub const SAVE_SCREENSHOT: Selector<(Rect,WindowId,WidgetId,&'static str)> = Selector::new("Save the screenshot image");
-pub const UPDATE_SCREENSHOT: Selector<&'static str> = Selector::new("Update the screenshot image");
-pub const SHOW_OVER_IMG: Selector<&'static str> =
+pub const SAVE_SCREENSHOT: Selector<(Rect,WindowId,WidgetId,&str)> = Selector::new("Save the screenshot image");
+pub const UPDATE_SCREENSHOT: Selector<String> = Selector::new("Update the screenshot image");
+pub const SHOW_OVER_IMG: Selector<&str> =
     Selector::new("Tell the ZStack to show the over_img, params: over_img path");
-pub const SAVE_OVER_IMG: Selector<(DynamicImage ,&'static str, &str, image::ImageFormat)> = Selector::new("Tell the ZStack to save the modified screenshot, params: (Screenshot original img, Folder Path Where To Save, New File Name, Image Format)");
+pub const SAVE_OVER_IMG: Selector<(&str ,&str, &str, image::ImageFormat)> = Selector::new("Tell the ZStack to save the modified screenshot, params: (Screenshot original img's path, Folder Path Where To Save, New File Name, Image Format)");
 
 const WINDOW_TITLE: LocalizedString<AppState> = LocalizedString::new("Screen Grabbing Application");
 
@@ -163,7 +162,7 @@ fn build_root_widget() -> impl Widget<AppState> {
         }),screenshot_widget_id);
 
     let zstack_id = WidgetId::next();
-    let zstack = IdentityWrapper::wrap(CustomZStack::new(screenshot_image), zstack_id);
+    let zstack = IdentityWrapper::wrap(CustomZStack::new(screenshot_image, screenshot_widget_id ), zstack_id);
     let spaced_zstack = Container::new(zstack).padding((10.0, 0.0));
 
     //TODO: make the image resizable and movable!
@@ -194,7 +193,7 @@ fn build_root_widget() -> impl Widget<AppState> {
             move |ctx: &mut EventCtx, _data: &mut AppState, _env: &Env| {
                 ctx.submit_command(
                     SHOW_OVER_IMG
-                        .with("./src/images/icons/red-circle.png")
+                        .with("./src/images/icons/red-arrow.png")
                         .to(Target::Widget(zstack_id)),
                 );
             }
@@ -203,18 +202,14 @@ fn build_root_widget() -> impl Widget<AppState> {
         .with_child(Button::from_label(Label::new("Save")).on_click(
             move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
                 // TODO: use a meaningful name and extension
-                let screen_img = Reader::open(SCREENSHOT_PATH)
-                    .expect("Can't open the screenshot!")
-                    .decode()
-                    .expect("Can't decode the screenshot");
                 ctx.submit_command(SAVE_OVER_IMG.with((
-                    screen_img,
+                    SCREENSHOT_PATH,
                     "./src/images/",
-                    "screenshot.png",
+                    "screenshot",
                     image::ImageFormat::Png,
                 )));
                 if data.screenshot_id.is_some() {
-                    ctx.submit_command(UPDATE_SCREENSHOT.with(SCREENSHOT_PATH).to(data.screenshot_id.unwrap()));
+                    ctx.submit_command(UPDATE_SCREENSHOT.with(String::from(SCREENSHOT_PATH)).to(data.screenshot_id.unwrap()));
                 }
             },
         ))
