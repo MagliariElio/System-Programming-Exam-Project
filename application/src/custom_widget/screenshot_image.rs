@@ -108,8 +108,8 @@ impl ScreenshotImage {
 }
 
 impl<T: Data> Widget<T> for ScreenshotImage {
-    #[instrument(name = "Image", level = "trace", skip(self, _ctx, event, _data, _env))]
-    fn event(&mut self, _ctx: &mut EventCtx, event: &Event, _data: &mut T, _env: &Env) {
+    #[instrument(name = "Image", level = "trace", skip(self, ctx, event, _data, _env))]
+    fn event(&mut self, ctx: &mut EventCtx, event: &Event, _data: &mut T, _env: &Env) {
         match event {
             Event::Command(cmd) => {
                 if cmd.is(UPDATE_SCREENSHOT) {
@@ -124,6 +124,8 @@ impl<T: Data> Widget<T> for ScreenshotImage {
                         screen_img.width() as usize,
                         screen_img.height() as usize,
                     ));
+                    ctx.request_layout();
+                    ctx.request_paint();
                 }
             }
             _ => {}

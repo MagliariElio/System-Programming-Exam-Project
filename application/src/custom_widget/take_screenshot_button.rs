@@ -1,4 +1,5 @@
-use std::fs;
+use std::fs::File;
+use std::io::{BufWriter, Write};
 use druid::debug_state::DebugState;
 use druid::widget::prelude::*;
 use druid::widget::{Click, ControllerHost, Label, LabelText};
@@ -282,5 +283,11 @@ fn save_screenshot(rect: &Rect, path: &str){
 
     let image = screen.capture_area(rect.x0 as i32, rect.y0 as i32, rect.width() as u32, rect.height() as u32).unwrap();
     let buffer = image.to_png(Compression::Fast).unwrap();
-    fs::write(path, buffer).unwrap();
+
+    let mut file = File::create(path)
+        .expect(format!("Can't create or open the path: {}", path).as_str());
+    let mut buf_writer = BufWriter::new(&mut file);
+    buf_writer.write_all(buffer.as_slice())
+        .expect(format!("Can't write in the file: {}", path).as_str());
+    buf_writer.flush().expect(format!("Can't flush the file: {}", path).as_str());
 }
