@@ -1,12 +1,11 @@
 mod custom_widget;
 
+use std::path::Path;
 use crate::custom_widget::{ColoredButton, CustomZStack, ScreenshotImage, SelectedRect, TakeScreenshotButton};
 use druid::piet::ImageFormat;
-use druid::widget::{
-    Button, Container, Flex, IdentityWrapper, Label, LensWrap, MainAxisAlignment, ZStack,
-};
-use druid::Target::Auto;
-use druid::{commands as sys_cmd, AppLauncher, Color, Data, Env, EventCtx, FontDescriptor, FontFamily, ImageBuf, Lens, LocalizedString, Menu, Rect, Selector, Target, UnitPoint, Vec2, Widget, WidgetExt, WidgetId, WindowDesc, WindowId, WindowState};
+use druid::widget::{Align, Button, Click, Container, ControllerHost, Flex, IdentityWrapper, Label, LensWrap, MainAxisAlignment, ZStack};
+use druid::Target::{Auto, Window};
+use druid::{commands as sys_cmd, AppLauncher, Color, Data, Env, EventCtx, FontDescriptor, FontFamily, ImageBuf, Lens, LocalizedString, Menu, Rect, Selector, Target, UnitPoint, Vec2, Widget, WidgetExt, WidgetId, WindowDesc, WindowId, WindowState, Point};
 use image::io::Reader;
 use std::sync::Arc;
 
@@ -16,6 +15,7 @@ use std::sync::Arc;
 
 const SCREENSHOT_PATH: &'static str = "./src/screenshots/screenshot.png";
 
+pub const UPDATE_COLOR: Selector<Option<Color>> = Selector::new("Update the over-img color");
 pub const SAVE_SCREENSHOT: Selector<(Rect,WindowId,WidgetId,&str)> = Selector::new("Save the screenshot image");
 pub const UPDATE_SCREENSHOT: Selector<String> = Selector::new("Update the screenshot image");
 pub const SHOW_OVER_IMG: Selector<&str> =
@@ -36,6 +36,10 @@ struct AppState {
     main_window_id: Option<WindowId>,
     #[data(ignore)]
     screenshot_id: Option<WidgetId>,
+    #[data(ignore)]
+    color: Option<Color>,
+    #[data(ignore)]
+    colors_window_opened: Option<WindowId>,
 }
 
 fn main() {
@@ -53,6 +57,8 @@ fn main() {
         },
         main_window_id: None,
         screenshot_id: None,
+        color: None,
+        colors_window_opened: None,
     };
 
     // start the application
@@ -138,34 +144,35 @@ fn build_root_widget() -> impl Widget<AppState> {
                     .transparent(true)
                     .resizable(false)
                     .show_titlebar(false)
-                    .set_window_state(WindowState::Maximized),
+                    .set_window_state(WindowState::Maximized)
             )
         },
     );
     let screenshot_image = IdentityWrapper::wrap(
         ScreenshotImage::new(ImageBuf::from_raw(
-            Arc::<[u8]>::from(Vec::new().as_slice()),
+            Arc::<[u8]>::from(Vec::from([0,0,0,0]).as_slice()),
             ImageFormat::RgbaSeparate,
-            0 as usize,
-            0 as usize,
+            1 as usize,
+            1 as usize,
         )).on_added(|img, _ctx,_data:&AppState, _env|{
-            let screen_img = Reader::open(SCREENSHOT_PATH)
-                .expect("Can't open the screenshot!")
-                .decode()
-                .expect("Can't decode the screenshot");
-            img.set_image_data(ImageBuf::from_raw(
-                Arc::<[u8]>::from(screen_img.as_bytes()),
-                ImageFormat::RgbaSeparate,
-                screen_img.width() as usize,
-                screen_img.height() as usize,
-            ));
+            if Path::new(SCREENSHOT_PATH).exists() {
+                let screen_img = Reader::open(SCREENSHOT_PATH)
+                    .expect("Can't open the screenshot!")
+                    .decode()
+                    .expect("Can't decode the screenshot");
+                img.set_image_data(ImageBuf::from_raw(
+                    Arc::<[u8]>::from(screen_img.as_bytes()),
+                    ImageFormat::RgbaSeparate,
+                    screen_img.width() as usize,
+                    screen_img.height() as usize,
+                ));
+            }
         }),screenshot_widget_id);
 
     let zstack_id = WidgetId::next();
     let zstack = IdentityWrapper::wrap(CustomZStack::new(screenshot_image, screenshot_widget_id ), zstack_id);
     let spaced_zstack = Container::new(zstack).padding((10.0, 0.0));
 
-    //TODO: make the image resizable and movable!
     let buttons_bar = Flex::row()
         .with_default_spacer()
         .with_child(Button::from_label(Label::new("⭕")).on_click(
@@ -196,6 +203,33 @@ fn build_root_widget() -> impl Widget<AppState> {
                         .with("./src/images/icons/red-arrow.png")
                         .to(Target::Widget(zstack_id)),
                 );
+            }
+        ))
+        .with_default_spacer()
+        .with_child(Button::from_label(Label::new("Color")).on_click(
+            move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
+                if data.colors_window_opened.is_none() {
+                    let mut init_pos = ctx.to_screen(Point::new(1.,ctx.size().height-1.));
+                    init_pos.y += 5.;
+                    let wd = WindowDesc::new(build_colors_window(zstack_id))
+                        .title(WINDOW_TITLE)
+                        .set_always_on_top(true)
+                        .show_titlebar(false)
+                        .set_window_state(WindowState::Restored)
+                        .window_size((1., 180.))
+                        .set_position(init_pos)
+                        .resizable(false)
+                        .transparent(false);
+                    data.colors_window_opened = Some(wd.id);
+                    ctx.new_window(wd);
+                } else {
+                    ctx.get_external_handle().submit_command(
+                        sys_cmd::CLOSE_WINDOW,
+                        (),
+                        Window(data.colors_window_opened.unwrap())
+                    ).unwrap();
+                    data.colors_window_opened = None;
+                }
             }
         ))
         .with_default_spacer()
@@ -253,4 +287,43 @@ fn make_menu(_window: Option<WindowId>, _data: &AppState, _env: &Env) -> Menu<Ap
             .entry(druid::platform_menus::common::copy())
             .entry(druid::platform_menus::common::paste()),
     )
+}
+
+fn build_colors_window(zstack_id: WidgetId) -> impl Widget<AppState>{
+    let none = create_color_button(None,zstack_id);
+    let green = create_color_button(Some(Color::GREEN),zstack_id);
+    let red = create_color_button(Some(Color::RED),zstack_id);
+    let black = create_color_button(Some(Color::BLACK),zstack_id);
+    let white = create_color_button(Some(Color::WHITE),zstack_id);
+    let aqua = create_color_button(Some(Color::AQUA),zstack_id);
+    let gray = create_color_button(Some(Color::GRAY),zstack_id);
+    let blue = create_color_button(Some(Color::BLUE),zstack_id);
+    let fuchsia = create_color_button(Some(Color::FUCHSIA),zstack_id);
+    let lime = create_color_button(Some(Color::LIME),zstack_id);
+    let maroon = create_color_button(Some(Color::MAROON),zstack_id);
+    let navy = create_color_button(Some(Color::NAVY),zstack_id);
+    let olive = create_color_button(Some(Color::OLIVE),zstack_id);
+    let purple = create_color_button(Some(Color::PURPLE),zstack_id);
+    let teal = create_color_button(Some(Color::TEAL),zstack_id);
+    let yellow = create_color_button(Some(Color::YELLOW),zstack_id);
+    let silver = create_color_button(Some(Color::SILVER),zstack_id);
+
+    let flex = Flex::column().with_default_spacer().with_child(none).with_default_spacer()
+        .with_child(Flex::row().with_default_spacer().with_child(green).with_default_spacer().with_child(red).with_default_spacer().with_child(black).with_default_spacer().with_child(white).with_default_spacer()).with_default_spacer()
+        .with_child(Flex::row().with_default_spacer().with_child(aqua).with_default_spacer().with_child(gray).with_default_spacer().with_child(blue).with_default_spacer().with_child(fuchsia).with_default_spacer()).with_default_spacer()
+        .with_child(Flex::row().with_default_spacer().with_child(lime).with_default_spacer().with_child(maroon).with_default_spacer().with_child(navy).with_default_spacer().with_child(olive).with_default_spacer()).with_default_spacer()
+        .with_child(Flex::row().with_default_spacer().with_child(purple).with_default_spacer().with_child(teal).with_default_spacer().with_child(yellow).with_default_spacer().with_child(silver).with_default_spacer()).with_default_spacer()
+        .background(Color::BLACK.with_alpha(0.3));
+
+    Align::centered(flex)
+}
+
+fn create_color_button(color: Option<Color>,zstack_id: WidgetId) -> ControllerHost<ColoredButton<AppState>, Click<AppState>> {
+    ColoredButton::from_label(Label::new(if color.is_some(){" "} else{"None"}))
+        .with_color(color.unwrap_or(Color::SILVER.with_alpha(0.8)))
+        .on_click(move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env|{
+            ctx.get_external_handle().submit_command(UPDATE_COLOR,color,Target::Widget(zstack_id)).unwrap();
+            data.color = color;
+            ctx.window().close();
+        })
 }
