@@ -196,11 +196,21 @@ fn build_root_widget() -> impl Widget<AppState> {
             },
         ))
         .with_default_spacer()
-        .with_child(Button::from_label(Label::new("▫")).on_click(
+        .with_child(Button::from_label(Label::new("→")).on_click(
             move |ctx: &mut EventCtx, _data: &mut AppState, _env: &Env| {
                 ctx.submit_command(
                     SHOW_OVER_IMG
                         .with("./src/images/icons/red-arrow.png")
+                        .to(Target::Widget(zstack_id)),
+                );
+            }
+        ))
+        .with_default_spacer()
+        .with_child(Button::from_label(Label::new("⎚")).on_click(
+            move |ctx: &mut EventCtx, _data: &mut AppState, _env: &Env| {
+                ctx.submit_command(
+                    SHOW_OVER_IMG
+                        .with("./src/images/icons/highlighter.png")
                         .to(Target::Widget(zstack_id)),
                 );
             }

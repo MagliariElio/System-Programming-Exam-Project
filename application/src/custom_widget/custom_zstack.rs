@@ -22,6 +22,7 @@ pub struct CustomZStack<T> {
     back_img_origin: Option<Point>,
     screenshot_id: WidgetId,
     color:Option<Color>,
+    is_highlighter: bool
 }
 
 struct ZChild<T> {
@@ -50,6 +51,7 @@ impl <T: Data> CustomZStack<T>  {
             back_img_origin: None,
             screenshot_id,
             color: None,
+            is_highlighter: false,
         }
     }
 
@@ -102,6 +104,9 @@ impl <T: Data> CustomZStack<T>  {
 
     pub fn show_over_img(self: &mut Self, open_path: &'static str, id: WidgetId, color: Option<Color>){
         if self.over_img.is_none() {
+            if open_path.split('/').last().unwrap() == "highlighter.png"{
+                self.is_highlighter = true;
+            }
             let mut img = Reader::open(open_path).unwrap().decode().unwrap();
             if color.is_some() {
                 let color = color.unwrap().as_rgba8();
@@ -126,6 +131,7 @@ impl <T: Data> CustomZStack<T>  {
         } else {
             self.rm_child();
             self.over_img = None;
+            self.is_highlighter = false;
         }
     }
 
@@ -148,14 +154,20 @@ impl <T: Data> CustomZStack<T>  {
             over_img_rect.y0 = (over_img_rect.y0*scale_factor_y).floor();
             over_img_rect.x1 = (over_img_rect.x1*scale_factor_x).expand();
             over_img_rect.y1 = (over_img_rect.y1*scale_factor_y).expand();
-            let over_img = self.over_img.as_mut().unwrap().resize_exact(over_img_rect.width() as u32, over_img_rect.height() as u32, FilterType::Lanczos3);
+            let over_img = self.over_img.as_mut().unwrap().resize(over_img_rect.width() as u32, over_img_rect.height() as u32, FilterType::Nearest);
 
             let mut out = back_img;
             let mut i2: u32 = 0; let mut j2: u32 = 0;
             for j1 in over_img_rect.y0 as u32 .. (over_img_rect.y1) as u32 {
                 for i1 in over_img_rect.x0 as u32 .. (over_img_rect.x1) as u32 {
-                    if over_img.get_pixel(i2, j2).channels()[3] > 50 {
-                        out.put_pixel(i1,j1,over_img.get_pixel(i2, j2));
+                    if over_img.in_bounds(i2, j2) {
+                        let mut over_px = over_img.get_pixel(i2, j2);
+                        if out.in_bounds(i1, j1) && over_px.channels()[3] > 50 {
+                            if self.is_highlighter {
+                                over_px = over_px.map_with_alpha(|x|x,|_a|60);
+                            }
+                            out.put_pixel(i1, j1, over_px);
+                        }
                     }
                     i2 += 1;
                 }
@@ -174,7 +186,7 @@ impl <T: Data> CustomZStack<T>  {
             self.over_img = None;
             self.back_img = Some(out);
             self.back_img_origin = None;
-
+            self.is_highlighter = false;
         } else {
 
         }
@@ -214,6 +226,7 @@ impl<T: Data> Widget<T> for CustomZStack<T> {
                     if self.over_img.is_some(){
                         self.rm_child();
                         self.over_img = None;
+                        self.is_highlighter = false;
                     }
                 }
                 ctx.children_changed();
