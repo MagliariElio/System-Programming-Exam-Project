@@ -10,8 +10,10 @@ use image::io::Reader;
 use std::sync::Arc;
 
 //TODO: Must remove a lot of .clone() methods everywhere!
-//TODO: Set the error messages everywhere they need!
+//TODO: Set the GUI error messages everywhere they need!
 //TODO: Make the main page GUI beautiful
+//TODO: Error handling.
+//TODO: Open the File/Image once and move the reference, read once and clone.
 
 const SCREENSHOT_PATH: &'static str = "./src/screenshots/screenshot.png";
 
@@ -196,11 +198,21 @@ fn build_root_widget() -> impl Widget<AppState> {
             },
         ))
         .with_default_spacer()
-        .with_child(Button::from_label(Label::new("▫")).on_click(
+        .with_child(Button::from_label(Label::new("→")).on_click(
             move |ctx: &mut EventCtx, _data: &mut AppState, _env: &Env| {
                 ctx.submit_command(
                     SHOW_OVER_IMG
                         .with("./src/images/icons/red-arrow.png")
+                        .to(Target::Widget(zstack_id)),
+                );
+            }
+        ))
+        .with_default_spacer()
+        .with_child(Button::from_label(Label::new("⎚")).on_click(
+            move |ctx: &mut EventCtx, _data: &mut AppState, _env: &Env| {
+                ctx.submit_command(
+                    SHOW_OVER_IMG
+                        .with("./src/images/icons/highlighter.png")
                         .to(Target::Widget(zstack_id)),
                 );
             }
