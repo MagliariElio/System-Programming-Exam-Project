@@ -10,8 +10,10 @@ use image::io::Reader;
 use std::sync::Arc;
 
 //TODO: Must remove a lot of .clone() methods everywhere!
-//TODO: Set the error messages everywhere they need!
+//TODO: Set the GUI error messages everywhere they need!
 //TODO: Make the main page GUI beautiful
+//TODO: Error handling.
+//TODO: Open the File/Image once and move the reference, read once and clone.
 
 const SCREENSHOT_PATH: &'static str = "./src/screenshots/screenshot.png";
 

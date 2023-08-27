@@ -2,7 +2,7 @@ use std::sync::Arc;
 use druid::{BoxConstraints, Data, Env, Event, EventCtx, InternalEvent, LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx, Point, Rect, Size, UnitPoint, UpdateCtx, Vec2, Widget, WidgetExt, WidgetPod, ImageBuf, WidgetId, Target, Color};
 use druid::kurbo::common::FloatExt;
 use druid::piet::ImageFormat;
-use image::ImageFormat as imgFormat;
+use image::{ImageFormat as imgFormat};
 use druid::widget::{Image};
 use image::{DynamicImage, GenericImage, GenericImageView, Pixel};
 use image::imageops::FilterType;
@@ -103,10 +103,12 @@ impl <T: Data> CustomZStack<T>  {
     }
 
     pub fn show_over_img(self: &mut Self, open_path: &'static str, id: WidgetId, color: Option<Color>){
+        //TODO: the over-image is trasparent but must sum the screenshot-image!
         if self.over_img.is_none() {
             if open_path.split('/').last().unwrap() == "highlighter.png"{
                 self.is_highlighter = true;
             }
+            //TODO: Make this async!
             let mut img = Reader::open(open_path).unwrap().decode().unwrap();
             if color.is_some() {
                 let color = color.unwrap().as_rgba8();
