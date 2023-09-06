@@ -11,7 +11,7 @@ use druid::piet::{LineJoin, StrokeStyle};
 const BORDER_WIDTH:f64 = 2.;
 const DISTANCE_MARGIN:f64 = 10.0;
 
-pub(crate) const UPDATE_ORIGIN:Selector<Point> = Selector::new("Tell the customZStack to update the resizableBox origin");
+pub const UPDATE_ORIGIN:Selector<Point> = Selector::new("Tell the customZStack to update the resizableBox origin");
 
 #[derive(Copy, Clone, PartialEq)]
 enum IfMousePressedWhere {
@@ -131,32 +131,32 @@ impl<T> ResizableBox<T> {
     }
 
     fn where_mouse_is(self: &Self, me:&MouseEvent) -> IfMousePressedWhere{
-        let pos = me.pos.clone();
+        let pos = me.pos;
         let x0 = self.rect.unwrap().x0;
         let x1 = self.rect.unwrap().x1;
         let y0 = self.rect.unwrap().y0;
         let y1 = self.rect.unwrap().y1;
-        return if f64::abs(pos.x.clone() - x0) < DISTANCE_MARGIN {
-            if f64::abs(pos.y.clone() - y0) < DISTANCE_MARGIN{
+        return if f64::abs(pos.x - x0) < DISTANCE_MARGIN {
+            if f64::abs(pos.y - y0) < DISTANCE_MARGIN{
                 IfMousePressedWhere::NorthWest(pos)
-            } else if f64::abs(pos.y.clone() - y1) < DISTANCE_MARGIN{
+            } else if f64::abs(pos.y - y1) < DISTANCE_MARGIN{
                 IfMousePressedWhere::SouthWest(pos)
             } else {
                 IfMousePressedWhere::West(pos)
             }
-        } else if f64::abs(pos.x.clone() - x1) < DISTANCE_MARGIN {
-            if f64::abs(pos.y.clone() - y0) < DISTANCE_MARGIN{
+        } else if f64::abs(pos.x - x1) < DISTANCE_MARGIN {
+            if f64::abs(pos.y - y0) < DISTANCE_MARGIN{
                 IfMousePressedWhere::NorthEst(pos)
-            } else if f64::abs(pos.y.clone() - y1) < DISTANCE_MARGIN{
+            } else if f64::abs(pos.y - y1) < DISTANCE_MARGIN{
                 IfMousePressedWhere::SouthEst(pos)
             } else {
                 IfMousePressedWhere::Est(pos)
             }
-        } else if f64::abs(pos.y.clone() - y0) < DISTANCE_MARGIN{
+        } else if f64::abs(pos.y - y0) < DISTANCE_MARGIN{
             IfMousePressedWhere::North(pos)
-        } else if f64::abs(pos.y.clone() - y1) < DISTANCE_MARGIN{
+        } else if f64::abs(pos.y - y1) < DISTANCE_MARGIN{
             IfMousePressedWhere::South(pos)
-        } else if pos.y.clone() > y0 && pos.y.clone() < y1 && pos.x.clone() > x0 && pos.x.clone() < x1{
+        } else if pos.y > y0 && pos.y < y1 && pos.x > x0 && pos.x < x1{
             IfMousePressedWhere::Inside(pos)
         } else {
             IfMousePressedWhere::NotInterested
@@ -192,7 +192,7 @@ impl<T: Data> Widget<T> for ResizableBox<T> {
             }
             Event::MouseMove(me) => {
                 if self.mouse != IfMousePressedWhere::NotInterested { //if the mouse has been pressed
-                    let pos = me.pos.clone();
+                    let pos = me.pos;
                     let mut rect = self.rect.unwrap();
                     match self.mouse {
                         IfMousePressedWhere::NotInterested => (),
@@ -261,10 +261,10 @@ impl<T: Data> Widget<T> for ResizableBox<T> {
                             self.mouse = IfMousePressedWhere::NorthWest(pos);
                         }
                         IfMousePressedWhere::Inside(old_pos) => {
-                            rect.y0 += pos.y.clone() - old_pos.y.clone();
-                            rect.y1 += pos.y.clone() - old_pos.y;
-                            rect.x0 += pos.x.clone() - old_pos.x.clone();
-                            rect.x1 += pos.x.clone() - old_pos.x;
+                            rect.y0 += pos.y - old_pos.y;
+                            rect.y1 += pos.y - old_pos.y;
+                            rect.x0 += pos.x - old_pos.x;
+                            rect.x1 += pos.x - old_pos.x;
                             self.mouse = IfMousePressedWhere::Inside(pos);
                         }
                     }

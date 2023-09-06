@@ -1,5 +1,4 @@
-use tracing::{instrument, warn};
-
+use tracing::{instrument};
 use druid::widget::prelude::*;
 use druid::{Cursor, MouseEvent, Point, Rect, Screen, theme};
 use druid::piet::{LineJoin, StrokeStyle};
@@ -56,32 +55,32 @@ impl SelectedRect {
     }
 
     fn where_mouse_is(self: &Self, me:&MouseEvent) -> IfMousePressedWhere{
-        let pos = me.pos.clone();
-        let x0 = self.rect.x0.clone();
-        let x1 = self.rect.x1.clone();
-        let y0 = self.rect.y0.clone();
-        let y1 = self.rect.y1.clone();
-        return if f64::abs(pos.x.clone() - x0) < DISTANCE_MARGIN {
-            if f64::abs(pos.y.clone() - y0) < DISTANCE_MARGIN{
+        let pos = me.pos;
+        let x0 = self.rect.x0;
+        let x1 = self.rect.x1;
+        let y0 = self.rect.y0;
+        let y1 = self.rect.y1;
+        return if f64::abs(pos.x - x0) < DISTANCE_MARGIN {
+            if f64::abs(pos.y - y0) < DISTANCE_MARGIN{
                 IfMousePressedWhere::NorthWest
-            } else if f64::abs(pos.y.clone() - y1) < DISTANCE_MARGIN{
+            } else if f64::abs(pos.y - y1) < DISTANCE_MARGIN{
                 IfMousePressedWhere::SouthWest
             } else {
                 IfMousePressedWhere::West
             }
-        } else if f64::abs(pos.x.clone() - x1) < DISTANCE_MARGIN {
-            if f64::abs(pos.y.clone() - y0) < DISTANCE_MARGIN{
+        } else if f64::abs(pos.x - x1) < DISTANCE_MARGIN {
+            if f64::abs(pos.y - y0) < DISTANCE_MARGIN{
                 IfMousePressedWhere::NorthEst
-            } else if f64::abs(pos.y.clone() - y1) < DISTANCE_MARGIN{
+            } else if f64::abs(pos.y - y1) < DISTANCE_MARGIN{
                 IfMousePressedWhere::SouthEst
             } else {
                 IfMousePressedWhere::Est
             }
-        } else if f64::abs(pos.y.clone() - y0) < DISTANCE_MARGIN{
+        } else if f64::abs(pos.y - y0) < DISTANCE_MARGIN{
             IfMousePressedWhere::North
-        } else if f64::abs(pos.y.clone() - y1) < DISTANCE_MARGIN{
+        } else if f64::abs(pos.y - y1) < DISTANCE_MARGIN{
             IfMousePressedWhere::South
-        } else if pos.y.clone() > y0 && pos.y.clone() < y1 && pos.x.clone() > x0 && pos.x.clone() < x1{
+        } else if pos.y > y0 && pos.y < y1 && pos.x > x0 && pos.x < x1{
             IfMousePressedWhere::Inside(pos)
         } else {
             IfMousePressedWhere::NotInterested
@@ -100,7 +99,7 @@ impl Widget<Rect> for SelectedRect {
             }
             Event::MouseMove(me) => {
                 if self.mouse != IfMousePressedWhere::NotInterested{ //if the mouse has been pressed
-                    let pos = me.pos.clone();
+                    let pos = me.pos;
                     match self.mouse {
                         IfMousePressedWhere::NotInterested => (),
                         IfMousePressedWhere::North => {
@@ -131,10 +130,10 @@ impl Widget<Rect> for SelectedRect {
                             self.rect.y0 = pos.y; self.rect.x0 = pos.x;
                         }
                         IfMousePressedWhere::Inside(old_pos) => {
-                            self.rect.y0 += pos.y.clone() - old_pos.y.clone();
-                            self.rect.y1 += pos.y.clone() - old_pos.y;
-                            self.rect.x0 += pos.x.clone() - old_pos.x.clone();
-                            self.rect.x1 += pos.x.clone() - old_pos.x;
+                            self.rect.y0 += pos.y - old_pos.y;
+                            self.rect.y1 += pos.y - old_pos.y;
+                            self.rect.x0 += pos.x - old_pos.x;
+                            self.rect.x1 += pos.x - old_pos.x;
                             self.mouse = IfMousePressedWhere::Inside(pos);
                             self.show_overlay = true;
                         }
@@ -177,11 +176,11 @@ impl Widget<Rect> for SelectedRect {
             _ => (),
         }
         //Keeps validity
-        while self.rect.x1.clone()<=self.rect.x0.clone()+BORDER_WIDTH{
+        while self.rect.x1<=self.rect.x0+BORDER_WIDTH{
             self.rect.x1 += 1.+BORDER_WIDTH;
             self.rect.x0 -= 1.+BORDER_WIDTH;
         }
-        while self.rect.y1.clone()<=self.rect.y0.clone()+BORDER_WIDTH{
+        while self.rect.y1<=self.rect.y0+BORDER_WIDTH{
             self.rect.y1 += 1.+BORDER_WIDTH;
             self.rect.y0 -= 1.+BORDER_WIDTH;
         }
@@ -226,8 +225,8 @@ impl Widget<Rect> for SelectedRect {
         bc.debug_check("SelectedRegion");
         let overlay_padding = if self.show_overlay { 0.0 } else { BORDER_WIDTH };
         bc.constrain(Size::new(
-            self.rect.x1.clone() - self.rect.x0.clone() + overlay_padding.clone() * 2.0,
-            self.rect.y1.clone() - self.rect.y0.clone() + overlay_padding * 2.0,
+            self.rect.x1 - self.rect.x0 + overlay_padding * 2.0,
+            self.rect.y1 - self.rect.y0 + overlay_padding * 2.0,
         ))
     }
 
@@ -235,10 +234,10 @@ impl Widget<Rect> for SelectedRect {
     #[instrument(name = "SelectedRegion", level = "trace", skip(self, ctx, env))]
     fn paint(&mut self, ctx: &mut PaintCtx, data: &Rect, env: &Env) {
         let rect = Rect {
-            x0: self.rect.x0.clone(),
-            y0: self.rect.y0.clone(),
-            x1: self.rect.x1.clone(),
-            y1: self.rect.y1.clone(),
+            x0: self.rect.x0,
+            y0: self.rect.y0,
+            x1: self.rect.x1,
+            y1: self.rect.y1,
         };
 
         // Draw the overlay
