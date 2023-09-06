@@ -1,28 +1,20 @@
 mod custom_widget;
 
 use std::path::Path;
-use crate::custom_widget::{ColoredButton, CustomZStack, ScreenshotImage, SelectedRect, TakeScreenshotButton};
+use crate::custom_widget::{ColoredButton, CREATE_ZSTACK, CustomZStack, OverImages, SAVE_OVER_IMG, SAVE_SCREENSHOT, ScreenshotImage, SelectedRect, SHOW_OVER_IMG, TakeScreenshotButton, UPDATE_BACK_IMG, UPDATE_COLOR};
 use druid::piet::ImageFormat;
 use druid::widget::{Align, Button, Click, Container, ControllerHost, Flex, IdentityWrapper, Label, LensWrap, MainAxisAlignment, ZStack};
 use druid::Target::{Auto, Window};
-use druid::{commands as sys_cmd, AppLauncher, Color, Data, Env, EventCtx, FontDescriptor, FontFamily, ImageBuf, Lens, LocalizedString, Menu, Rect, Selector, Target, UnitPoint, Vec2, Widget, WidgetExt, WidgetId, WindowDesc, WindowId, WindowState, Point};
+use druid::{commands as sys_cmd, AppLauncher, Color, Data, Env, EventCtx, FontDescriptor, FontFamily, ImageBuf, Lens, LocalizedString, Menu, Rect, Target, UnitPoint, Vec2, Widget, WidgetExt, WidgetId, WindowDesc, WindowId, WindowState, Point};
 use image::io::Reader;
 use std::sync::Arc;
 
-//TODO: Must remove a lot of .clone() methods everywhere!
 //TODO: Set the GUI error messages everywhere they need!
 //TODO: Make the main page GUI beautiful
 //TODO: Error handling.
-//TODO: Open the File/Image once and move the reference, read once and clone.
+
 
 const SCREENSHOT_PATH: &'static str = "./src/screenshots/screenshot.png";
-
-pub const UPDATE_COLOR: Selector<Option<Color>> = Selector::new("Update the over-img color");
-pub const SAVE_SCREENSHOT: Selector<(Rect,WindowId,WidgetId,&str)> = Selector::new("Save the screenshot image");
-pub const UPDATE_SCREENSHOT: Selector<String> = Selector::new("Update the screenshot image");
-pub const SHOW_OVER_IMG: Selector<&str> =
-    Selector::new("Tell the ZStack to show the over_img, params: over_img path");
-pub const SAVE_OVER_IMG: Selector<(&str ,&str, &str, image::ImageFormat)> = Selector::new("Tell the ZStack to save the modified screenshot, params: (Screenshot original img's path, Folder Path Where To Save, New File Name, Image Format)");
 
 const WINDOW_TITLE: LocalizedString<AppState> = LocalizedString::new("Screen Grabbing Application");
 
@@ -36,6 +28,8 @@ struct AppState {
     rect: Rect,
     #[data(ignore)]
     main_window_id: Option<WindowId>,
+    #[data(ignore)]
+    custom_zstack_id: Option<WidgetId>,
     #[data(ignore)]
     screenshot_id: Option<WidgetId>,
     #[data(ignore)]
@@ -58,6 +52,7 @@ fn main() {
             y1: Y1,
         },
         main_window_id: None,
+        custom_zstack_id: None,
         screenshot_id: None,
         color: None,
         colors_window_opened: None,
@@ -89,6 +84,7 @@ fn build_screenshot_widget() -> impl Widget<AppState> {
         ctx.submit_command(SAVE_SCREENSHOT.with((
             data.rect,
             data.main_window_id.expect("How did you open this window?"),
+            data.custom_zstack_id.expect("How did you open this window?"),
             data.screenshot_id.expect("How did you open this window?"),
             SCREENSHOT_PATH
         )).to(Target::Widget(ctx.widget_id())));
@@ -134,10 +130,12 @@ fn build_screenshot_widget() -> impl Widget<AppState> {
 
 fn build_root_widget() -> impl Widget<AppState> {
     let screenshot_widget_id = WidgetId::next();
+    let zstack_id = WidgetId::next();
     let take_screenshot_button = Button::from_label(Label::new("Take Screenshoot")).on_click(
         move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
             data.main_window_id = Some(ctx.window_id());
-            data.screenshot_id = Some(screenshot_widget_id.clone());
+            data.custom_zstack_id = Some(zstack_id);
+            data.screenshot_id = Some(screenshot_widget_id);
             ctx.submit_command(sys_cmd::HIDE_WINDOW.to(Auto));
             ctx.new_window(
                 WindowDesc::new(build_screenshot_widget())
@@ -150,39 +148,49 @@ fn build_root_widget() -> impl Widget<AppState> {
             )
         },
     );
+
     let screenshot_image = IdentityWrapper::wrap(
         ScreenshotImage::new(ImageBuf::from_raw(
             Arc::<[u8]>::from(Vec::from([0,0,0,0]).as_slice()),
             ImageFormat::RgbaSeparate,
             1 as usize,
             1 as usize,
-        )).on_added(|img, _ctx,_data:&AppState, _env|{
+        )).on_added(move |img, ctx,_data:&AppState, _env|{
             if Path::new(SCREENSHOT_PATH).exists() {
-                let screen_img = Reader::open(SCREENSHOT_PATH)
+                let screen_img = Arc::new(Reader::open(SCREENSHOT_PATH)
                     .expect("Can't open the screenshot!")
                     .decode()
-                    .expect("Can't decode the screenshot");
+                    .expect("Can't decode the screenshot"));
                 img.set_image_data(ImageBuf::from_raw(
                     Arc::<[u8]>::from(screen_img.as_bytes()),
                     ImageFormat::RgbaSeparate,
                     screen_img.width() as usize,
                     screen_img.height() as usize,
                 ));
+                ctx.submit_command(UPDATE_BACK_IMG.with(screen_img).to(Target::Widget(zstack_id)));
             }
         }),screenshot_widget_id);
 
-    let zstack_id = WidgetId::next();
-    let zstack = IdentityWrapper::wrap(CustomZStack::new(screenshot_image, screenshot_widget_id ), zstack_id);
+
+    let zstack = IdentityWrapper::wrap(CustomZStack::new(screenshot_image, screenshot_widget_id ), zstack_id)
+        .on_added(move |_this,ctx,_data:&AppState, _env|{
+            let mut args = Vec::<&'static str>::new();
+            args.push("./src/images/icons/red-circle.png");
+            args.push("./src/images/icons/triangle.png");
+            args.push("./src/images/icons/red-arrow.png");
+            args.push("./src/images/icons/highlighter.png");
+            ctx.submit_command(CREATE_ZSTACK.with(args).to(Target::Widget(zstack_id)));
+
+        });
     let spaced_zstack = Container::new(zstack).padding((10.0, 0.0));
 
     let buttons_bar = Flex::row()
         .with_default_spacer()
         .with_child(Button::from_label(Label::new("⭕")).on_click(
             move |ctx: &mut EventCtx, _data: &mut AppState, _env: &Env| {
-                // TODO: introduce a switch with meaningful paths containing different images!
                 ctx.submit_command(
                     SHOW_OVER_IMG
-                        .with("./src/images/icons/red-circle.png")
+                        .with(OverImages::Circles)
                         .to(Target::Widget(zstack_id)),
                 );
             },
@@ -192,7 +200,7 @@ fn build_root_widget() -> impl Widget<AppState> {
             move |ctx: &mut EventCtx, _data: &mut AppState, _env: &Env| {
                 ctx.submit_command(
                     SHOW_OVER_IMG
-                        .with("./src/images/icons/triangle.png")
+                        .with(OverImages::Triangle)
                         .to(Target::Widget(zstack_id)),
                 );
             },
@@ -202,7 +210,7 @@ fn build_root_widget() -> impl Widget<AppState> {
             move |ctx: &mut EventCtx, _data: &mut AppState, _env: &Env| {
                 ctx.submit_command(
                     SHOW_OVER_IMG
-                        .with("./src/images/icons/red-arrow.png")
+                        .with(OverImages::Arrow)
                         .to(Target::Widget(zstack_id)),
                 );
             }
@@ -212,7 +220,7 @@ fn build_root_widget() -> impl Widget<AppState> {
             move |ctx: &mut EventCtx, _data: &mut AppState, _env: &Env| {
                 ctx.submit_command(
                     SHOW_OVER_IMG
-                        .with("./src/images/icons/highlighter.png")
+                        .with(OverImages::Highlighter)
                         .to(Target::Widget(zstack_id)),
                 );
             }
@@ -246,17 +254,13 @@ fn build_root_widget() -> impl Widget<AppState> {
         ))
         .with_default_spacer()
         .with_child(Button::from_label(Label::new("Save")).on_click(
-            move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
+            move |ctx: &mut EventCtx, _data: &mut AppState, _env: &Env| {
                 // TODO: use a meaningful name and extension
                 ctx.submit_command(SAVE_OVER_IMG.with((
-                    SCREENSHOT_PATH,
                     "./src/images/",
                     "screenshot",
                     image::ImageFormat::Png,
                 )));
-                if data.screenshot_id.is_some() {
-                    ctx.submit_command(UPDATE_SCREENSHOT.with(String::from(SCREENSHOT_PATH)).to(data.screenshot_id.unwrap()));
-                }
             },
         ))
         .with_default_spacer()
