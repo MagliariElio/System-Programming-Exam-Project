@@ -6,7 +6,7 @@ use druid::widget::{
     Button, Container, Flex, IdentityWrapper, Label, LensWrap, MainAxisAlignment, ZStack,
 };
 use druid::Target::Auto;
-use druid::{commands as sys_cmd, AppLauncher, Color, Data, Env, EventCtx, FontDescriptor, FontFamily, ImageBuf, Lens, LocalizedString, Menu, Rect, Selector, Target, UnitPoint, Vec2, Widget, WidgetExt, WidgetId, WindowDesc, WindowId, WindowState};
+use druid::{commands as sys_cmd, AppLauncher, Color, Data, Env, EventCtx, FontDescriptor, FontFamily, ImageBuf, Lens, LocalizedString, Menu, Rect, Selector, Target, UnitPoint, Vec2, Widget, WidgetExt, WidgetId, WindowDesc, WindowId, WindowState, MenuItem};
 use image::io::Reader;
 use image::DynamicImage;
 use std::sync::Arc;
@@ -233,6 +233,22 @@ fn build_root_widget() -> impl Widget<AppState> {
     layout
 }
 
+pub const Shortcut_Keys: Selector = Selector::new("ShortcutKeys-Command");
+
+pub fn show_about<T: Data>()-> MenuItem<T>{
+    MenuItem::new(LocalizedString::new("About Us"))
+        .command(sys_cmd::SHOW_ABOUT)
+}
+
+pub fn set_shortcutkeys<T: Data>()-> MenuItem<T>{
+    MenuItem::new(LocalizedString::new("Shortcut Keys"))
+        .command(Shortcut_Keys)
+}
+
+pub fn set_savelocation<T: Data>()-> MenuItem<T>{
+    MenuItem::new(LocalizedString::new("Save Location"))
+}
+
 fn make_menu(_window: Option<WindowId>, _data: &AppState, _env: &Env) -> Menu<AppState> {
     let mut base = Menu::empty();
     #[cfg(target_os = "macos")]
@@ -250,12 +266,18 @@ fn make_menu(_window: Option<WindowId>, _data: &AppState, _env: &Env) -> Menu<Ap
     }
     //TODO: implement the menù
     base.entry(
-        Menu::new(LocalizedString::new("common-menu-edit-menu"))
+        Menu::new(LocalizedString::new("Edit"))
             .entry(druid::platform_menus::common::undo())
             .entry(druid::platform_menus::common::redo())
             .separator()
             .entry(druid::platform_menus::common::cut())
             .entry(druid::platform_menus::common::copy())
             .entry(druid::platform_menus::common::paste()),
+    )
+    .entry(
+        Menu::new(LocalizedString::new("Settings"))
+            .entry(show_about())
+            .entry(set_savelocation())
+            .entry(set_shortcutkeys())
     )
 }
