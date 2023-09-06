@@ -153,8 +153,8 @@ impl<T: Data> Widget<T> for ColoredButton<T> {
         ctx.set_baseline_offset(baseline + LABEL_INSETS.y1);
 
         let button_size = bc.constrain(Size::new(
-            self.label_size.width.clone() + padding.width,
-            (self.label_size.height.clone() + padding.height).max(min_height),
+            self.label_size.width + padding.width,
+            (self.label_size.height + padding.height).max(min_height),
         ));
         trace!("Computed button size: {}", button_size);
         button_size
@@ -169,7 +169,7 @@ impl<T: Data> Widget<T> for ColoredButton<T> {
 
         let rounded_rect = size
             .to_rect()
-            .inset(-stroke_width.clone() / 2.0)
+            .inset(-stroke_width / 2.0)
             .to_rounded_rect(env.get(theme::BUTTON_BORDER_RADIUS));
 
         let bg_gradient = if ctx.is_disabled() {

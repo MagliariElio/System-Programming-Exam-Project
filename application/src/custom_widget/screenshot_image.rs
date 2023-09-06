@@ -1,15 +1,11 @@
 use std::sync::Arc;
-use druid::{
-    kurbo::Rect,
-    piet::{Image as _, ImageBuf, InterpolationMode, PietImage},
-    widget::prelude::*,
-    Data,
-};
+use druid::{kurbo::Rect, piet::{Image as _, ImageBuf, InterpolationMode, PietImage}, widget::prelude::*, Data, Selector};
 use druid::piet::ImageFormat;
 use druid::widget::FillStrat;
-use image::io::Reader;
+use image::DynamicImage;
 use tracing::{instrument, trace};
-use crate::{UPDATE_SCREENSHOT};
+
+pub const UPDATE_SCREENSHOT: Selector<Arc<DynamicImage>> = Selector::new("Update the screenshot image");
 
 pub struct ScreenshotImage {
     image_data: ImageBuf,
@@ -113,22 +109,20 @@ impl ScreenshotImage {
 }
 
 impl<T: Data> Widget<T> for ScreenshotImage {
-    #[instrument(name = "Image", level = "trace", skip(self, _ctx, event, _data, _env))]
-    fn event(&mut self, _ctx: &mut EventCtx, event: &Event, _data: &mut T, _env: &Env) {
+    #[instrument(name = "Image", level = "trace", skip(self, ctx, event, _data, _env))]
+    fn event(&mut self, ctx: &mut EventCtx, event: &Event, _data: &mut T, _env: &Env) {
         match event {
             Event::Command(cmd) => {
                 if cmd.is(UPDATE_SCREENSHOT) {
-                    let path = cmd.get_unchecked(UPDATE_SCREENSHOT);
-                    let screen_img = Reader::open(path)
-                        .expect("Can't open the screenshot!")
-                        .decode()
-                        .expect("Can't decode the screenshot");
+                    let screen_img = cmd.get_unchecked(UPDATE_SCREENSHOT);
                     self.set_image_data(ImageBuf::from_raw(
-                        Arc::<[u8]>::from(screen_img.as_bytes()),
+                        Arc::<[u8]>::from((**screen_img).clone().as_bytes()),
                         ImageFormat::RgbaSeparate,
                         screen_img.width() as usize,
                         screen_img.height() as usize,
                     ));
+                    ctx.request_layout();
+                    ctx.request_paint();
                 }
             }
             _ => {}

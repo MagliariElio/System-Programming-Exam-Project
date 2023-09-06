@@ -1,5 +1,3 @@
-//! Please consider using SVG and the SVG widget as it scales much better.
-
 use druid::piet::ImageFormat;
 use druid::widget::FillStrat;
 use druid::{
@@ -177,35 +175,35 @@ impl OverImage {
     }
 
     fn where_mouse_is(self: &mut Self, me: &MouseEvent) -> IfMousePressedWhere {
-        let pos = me.pos.clone();
+        let pos = me.pos;
         let x0 = 0.;
         let x1 = self.image_size().width;
         let y0 = 0.;
         let y1 = self.image_size().height;
-        return if f64::abs(pos.x.clone() - x0) < DISTANCE_MARGIN {
-            if f64::abs(pos.y.clone() - y0) < DISTANCE_MARGIN {
+        return if f64::abs(pos.x - x0) < DISTANCE_MARGIN {
+            if f64::abs(pos.y - y0) < DISTANCE_MARGIN {
                 IfMousePressedWhere::NorthWest
-            } else if f64::abs(pos.y.clone() - y1) < DISTANCE_MARGIN {
+            } else if f64::abs(pos.y - y1) < DISTANCE_MARGIN {
                 IfMousePressedWhere::SouthWest
             } else {
                 IfMousePressedWhere::West
             }
-        } else if f64::abs(pos.x.clone() - x1) < DISTANCE_MARGIN {
-            if f64::abs(pos.y.clone() - y0) < DISTANCE_MARGIN {
+        } else if f64::abs(pos.x - x1) < DISTANCE_MARGIN {
+            if f64::abs(pos.y - y0) < DISTANCE_MARGIN {
                 IfMousePressedWhere::NorthEst
-            } else if f64::abs(pos.y.clone() - y1) < DISTANCE_MARGIN {
+            } else if f64::abs(pos.y - y1) < DISTANCE_MARGIN {
                 IfMousePressedWhere::SouthEst
             } else {
                 IfMousePressedWhere::Est
             }
-        } else if f64::abs(pos.y.clone() - y0) < DISTANCE_MARGIN {
+        } else if f64::abs(pos.y - y0) < DISTANCE_MARGIN {
             IfMousePressedWhere::North
-        } else if f64::abs(pos.y.clone() - y1) < DISTANCE_MARGIN {
+        } else if f64::abs(pos.y - y1) < DISTANCE_MARGIN {
             IfMousePressedWhere::South
-        } else if pos.y.clone() > y0
-            && pos.y.clone() < y1
-            && pos.x.clone() > x0
-            && pos.x.clone() < x1
+        } else if pos.y > y0
+            && pos.y < y1
+            && pos.x > x0
+            && pos.x < x1
         {
             IfMousePressedWhere::Inside(pos)
         } else {
@@ -226,7 +224,7 @@ impl<T: Data> Widget<T> for OverImage {
             Event::MouseMove(me) => {
                 if self.mouse != IfMousePressedWhere::NotInterested {
                     //if the mouse has been pressed
-                    let pos = me.pos.clone();
+                    let pos = me.pos;
                     match self.mouse {
                         IfMousePressedWhere::Est => {
                             image_size.x1 = pos.x;
@@ -264,11 +262,11 @@ impl<T: Data> Widget<T> for OverImage {
         }
         //Keeps validity
 
-        while image_size.x1.clone() <= image_size.x0.clone() + BORDER_WIDTH {
+        while image_size.x1 <= image_size.x0 + BORDER_WIDTH {
             image_size.x1 += 1. + BORDER_WIDTH;
             image_size.x0 -= 1. + BORDER_WIDTH;
         }
-        while image_size.y1.clone() <= image_size.y0.clone() + BORDER_WIDTH {
+        while image_size.y1 <= image_size.y0 + BORDER_WIDTH {
             image_size.y1 += 1. + BORDER_WIDTH;
             image_size.y0 -= 1. + BORDER_WIDTH;
         }
@@ -348,11 +346,11 @@ impl<T: Data> Widget<T> for OverImage {
         let max = bc.max();
         let image_size = self.image_size();
         let size = if bc.is_width_bounded() && !bc.is_height_bounded() {
-            let ratio = max.width.clone() / image_size.width;
-            Size::new(max.width.clone(), ratio * image_size.height)
+            let ratio = max.width / image_size.width;
+            Size::new(max.width, ratio * image_size.height)
         } else if bc.is_height_bounded() && !bc.is_width_bounded() {
             let ratio = max.height / image_size.height;
-            Size::new(ratio * image_size.width, max.height.clone())
+            Size::new(ratio * image_size.width, max.height)
         } else {
             bc.constrain(image_size)
         };

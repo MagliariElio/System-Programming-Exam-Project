@@ -1,11 +1,19 @@
-use std::fs;
+use std::fs::File;
+use std::io::{BufWriter, Write};
+use std::sync::Arc;
 use druid::debug_state::DebugState;
 use druid::widget::prelude::*;
 use druid::widget::{Click, ControllerHost, Label, LabelText};
-use druid::{commands as sys_cmd, theme, Affine, Data, Insets, LinearGradient, UnitPoint, Color, Rect, WindowId};
+use druid::{commands as sys_cmd, theme, Affine, Data, Insets, LinearGradient, UnitPoint, Color, Rect, WindowId, Selector};
+use image::{DynamicImage};
+use image::io::Reader;
 use screenshots::{Compression, Screen};
 use tracing::{instrument, trace};
-use crate::{SAVE_SCREENSHOT, SCREENSHOT_PATH, UPDATE_SCREENSHOT};
+use crate::custom_widget::screenshot_image::UPDATE_SCREENSHOT;
+use crate::custom_widget::UPDATE_BACK_IMG;
+use crate::SCREENSHOT_PATH;
+
+pub const SAVE_SCREENSHOT: Selector<(Rect,WindowId,WidgetId,WidgetId,&str)> = Selector::new("Save the screenshot image, last param: where to save");
 
 // the minimum padding added to a button.
 // NOTE: these values are chosen to match the existing look of TextBox; these
@@ -17,7 +25,7 @@ pub struct TakeScreenshotButton<T> {
     label: Label<T>,
     label_size: Size,
     color: Option<Color>,
-    taking_screenshot: Option<(Rect,WindowId,WidgetId,&'static str)>
+    taking_screenshot: Option<(Rect,WindowId,WidgetId,WidgetId,&'static str)>
 }
 
 #[allow(dead_code)]
@@ -116,15 +124,18 @@ impl<T: Data> Widget<T> for TakeScreenshotButton<T> {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, _data: &mut T, _env: &Env) {
 
         if self.taking_screenshot.is_some(){
-            let (rect,main_window_id,screenshot_id,path) = self.taking_screenshot.unwrap();
+            let (rect,main_window_id,custom_zstack_id,screenshot_id,save_path) = self.taking_screenshot.unwrap();
             self.taking_screenshot = None;
-            save_screenshot(&rect,path);
+            let new_img = Arc::new(save_screenshot(&rect,save_path));
             let main_id = main_window_id;
             ctx.get_external_handle()
                 .submit_command(sys_cmd::SHOW_WINDOW, (), main_id)
                 .expect("Error sending the event to the window");
             ctx.get_external_handle()
-                .submit_command(UPDATE_SCREENSHOT, SCREENSHOT_PATH, screenshot_id)
+                .submit_command(UPDATE_SCREENSHOT, new_img.clone(), screenshot_id)
+                .expect("Error sending the event to the screenshot widget");
+            ctx.get_external_handle()
+                .submit_command(UPDATE_BACK_IMG,new_img,custom_zstack_id)
                 .expect("Error sending the event to the screenshot widget");
             ctx.window().close();
         }
@@ -133,8 +144,8 @@ impl<T: Data> Widget<T> for TakeScreenshotButton<T> {
             Event::Command(cmd) => {
                 if cmd.is(SAVE_SCREENSHOT) {
                     ctx.window().hide();
-                    let (rect,main_window_id,screenshot_id,path) = cmd.get_unchecked(SAVE_SCREENSHOT);
-                    self.taking_screenshot = Some((*rect,*main_window_id,*screenshot_id,*path));
+                    let (rect,main_window_id,custom_zstack_id,screenshot_id,path) = cmd.get_unchecked(SAVE_SCREENSHOT);
+                    self.taking_screenshot = Some((*rect,*main_window_id,*custom_zstack_id,*screenshot_id,*path));
                     ctx.request_layout();
                 }
             }
@@ -182,8 +193,8 @@ impl<T: Data> Widget<T> for TakeScreenshotButton<T> {
         ctx.set_baseline_offset(baseline + LABEL_INSETS.y1);
 
         let button_size = bc.constrain(Size::new(
-            self.label_size.width.clone() + padding.width,
-            (self.label_size.height.clone() + padding.height).max(min_height),
+            self.label_size.width + padding.width,
+            (self.label_size.height + padding.height).max(min_height),
         ));
         trace!("Computed button size: {}", button_size);
         button_size
@@ -198,7 +209,7 @@ impl<T: Data> Widget<T> for TakeScreenshotButton<T> {
 
         let rounded_rect = size
             .to_rect()
-            .inset(-stroke_width.clone() / 2.0)
+            .inset(-stroke_width / 2.0)
             .to_rounded_rect(env.get(theme::BUTTON_BORDER_RADIUS));
 
         let bg_gradient = if ctx.is_disabled() {
@@ -260,7 +271,7 @@ impl<T: Data> Widget<T> for TakeScreenshotButton<T> {
 }
 
 
-fn save_screenshot(rect: &Rect, path: &str){
+fn save_screenshot(rect: &Rect, path: &str) -> DynamicImage{
     //TODO:
     /* READ THIS TO IMPLEMENT MULTI-SCREEN GRABBING
     let screens = Screen::all().unwrap();
@@ -278,9 +289,21 @@ fn save_screenshot(rect: &Rect, path: &str){
     */
 
     let screen = Screen::from_point(rect.x0 as i32, rect.y0 as i32).unwrap();
-    println!("capturer {screen:?}");
+    println!("capturer {:?}",screen);
 
     let image = screen.capture_area(rect.x0 as i32, rect.y0 as i32, rect.width() as u32, rect.height() as u32).unwrap();
     let buffer = image.to_png(Compression::Fast).unwrap();
-    fs::write(path, buffer).unwrap();
+
+    let mut file = File::create(path)
+        .expect(format!("Can't create or open the path: {}", path).as_str());
+    let mut buf_writer = BufWriter::new(&mut file);
+    buf_writer.write_all(buffer.as_slice())
+        .expect(format!("Can't write in the file: {}", path).as_str());
+    buf_writer.flush().expect(format!("Can't flush the file: {}", path).as_str());
+    //TODO: find a better way than save it and read again.
+    let screen_img = Reader::open(SCREENSHOT_PATH)
+        .expect("Can't open the screenshot!")
+        .decode()
+        .expect("Can't decode the screenshot");
+    screen_img
 }
