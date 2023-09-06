@@ -108,7 +108,7 @@ impl <T: Data> CustomZStack<T>  {
             if open_path.split('/').last().unwrap() == "highlighter.png"{
                 self.is_highlighter = true;
             }
-            //TODO: Make this async!
+            //TODO: Make this async! (Rust seams to don't have a stream management lib, I don't want to implement it!)
             let mut img = Reader::open(open_path).unwrap().decode().unwrap();
             if color.is_some() {
                 let color = color.unwrap().as_rgba8();
@@ -163,12 +163,13 @@ impl <T: Data> CustomZStack<T>  {
             for j1 in over_img_rect.y0 as u32 .. (over_img_rect.y1) as u32 {
                 for i1 in over_img_rect.x0 as u32 .. (over_img_rect.x1) as u32 {
                     if over_img.in_bounds(i2, j2) {
-                        let mut over_px = over_img.get_pixel(i2, j2);
-                        if out.in_bounds(i1, j1) && over_px.channels()[3] > 50 {
-                            if self.is_highlighter {
-                                over_px = over_px.map_with_alpha(|x|x,|_a|60);
-                            }
+                        let over_px = over_img.get_pixel(i2, j2);
+                        if out.in_bounds(i1, j1) && over_px.channels()[3] == u8::MAX {
                             out.put_pixel(i1, j1, over_px);
+                        } else if out.in_bounds(i1, j1) && over_px.channels()[3] != 0{
+                            let mut new_px = out.get_pixel(i1,j1);
+                            new_px.blend(&over_px);
+                            out.put_pixel(i1,j1, new_px);
                         }
                     }
                     i2 += 1;
