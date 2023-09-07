@@ -1,7 +1,7 @@
 mod custom_widget;
 
 use std::path::Path;
-use crate::custom_widget::{ColoredButton, CREATE_ZSTACK, CustomZStack, OverImages, SAVE_OVER_IMG, SAVE_SCREENSHOT, ScreenshotImage, SelectedRect, SHOW_OVER_IMG, TakeScreenshotButton, UPDATE_BACK_IMG, UPDATE_COLOR};
+use crate::custom_widget::{ColoredButton, CREATE_ZSTACK, CustomSlider, CustomZStack, OverImages, SAVE_OVER_IMG, SAVE_SCREENSHOT, ScreenshotImage, SelectedRect, SHOW_OVER_IMG, TakeScreenshotButton, UPDATE_BACK_IMG, UPDATE_COLOR};
 use druid::piet::ImageFormat;
 use druid::widget::{Align, Button, Click, Container, ControllerHost, Flex, IdentityWrapper, Label, LensWrap, MainAxisAlignment, ZStack};
 use druid::Target::{Auto, Window};
@@ -26,6 +26,7 @@ const Y1: f64 = 1080.; // 500.
 #[derive(Clone, Data, Lens)]
 struct AppState {
     rect: Rect,
+    alpha: f64,
     #[data(ignore)]
     main_window_id: Option<WindowId>,
     #[data(ignore)]
@@ -51,6 +52,7 @@ fn main() {
             x1: X1,
             y1: Y1,
         },
+        alpha: 100.0,
         main_window_id: None,
         custom_zstack_id: None,
         screenshot_id: None,
@@ -236,7 +238,7 @@ fn build_root_widget() -> impl Widget<AppState> {
                         .set_always_on_top(true)
                         .show_titlebar(false)
                         .set_window_state(WindowState::Restored)
-                        .window_size((1., 180.))
+                        .window_size((1., 250.))
                         .set_position(init_pos)
                         .resizable(false)
                         .transparent(false);
@@ -324,11 +326,19 @@ fn build_colors_window(zstack_id: WidgetId) -> impl Widget<AppState>{
     let yellow = create_color_button(Some(Color::YELLOW),zstack_id);
     let silver = create_color_button(Some(Color::SILVER),zstack_id);
 
+    let label = Label::new("Transparency:").with_text_color(Color::WHITE);
+    let alpha_slider = CustomSlider::new().with_range(1.,100.).with_step(1.)
+        .on_added(move |this,_ctx,_data,_env|{
+            this.set_zstack_id(zstack_id);
+        })
+        .lens(AppState::alpha).padding(5.0);
+
     let flex = Flex::column().with_default_spacer().with_child(none).with_default_spacer()
         .with_child(Flex::row().with_default_spacer().with_child(green).with_default_spacer().with_child(red).with_default_spacer().with_child(black).with_default_spacer().with_child(white).with_default_spacer()).with_default_spacer()
         .with_child(Flex::row().with_default_spacer().with_child(aqua).with_default_spacer().with_child(gray).with_default_spacer().with_child(blue).with_default_spacer().with_child(fuchsia).with_default_spacer()).with_default_spacer()
         .with_child(Flex::row().with_default_spacer().with_child(lime).with_default_spacer().with_child(maroon).with_default_spacer().with_child(navy).with_default_spacer().with_child(olive).with_default_spacer()).with_default_spacer()
         .with_child(Flex::row().with_default_spacer().with_child(purple).with_default_spacer().with_child(teal).with_default_spacer().with_child(yellow).with_default_spacer().with_child(silver).with_default_spacer()).with_default_spacer()
+        .with_default_spacer().with_child(Flex::row().with_child(label)).with_child(Flex::row().with_child(alpha_slider))
         .background(Color::BLACK.with_alpha(0.3));
 
     Align::centered(flex)
@@ -338,7 +348,7 @@ fn create_color_button(color: Option<Color>,zstack_id: WidgetId) -> ControllerHo
     ColoredButton::from_label(Label::new(if color.is_some(){" "} else{"None"}))
         .with_color(color.unwrap_or(Color::SILVER.with_alpha(0.8)))
         .on_click(move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env|{
-            ctx.get_external_handle().submit_command(UPDATE_COLOR,color,Target::Widget(zstack_id)).unwrap();
+            ctx.get_external_handle().submit_command(UPDATE_COLOR,(color,None),Target::Widget(zstack_id)).unwrap();
             data.color = color;
             ctx.window().close();
         })
