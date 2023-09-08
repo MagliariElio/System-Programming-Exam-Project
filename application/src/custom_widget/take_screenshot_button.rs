@@ -1,19 +1,15 @@
-use std::fs::File;
-use std::io::{BufWriter, Write};
 use std::sync::Arc;
 use druid::debug_state::DebugState;
 use druid::widget::prelude::*;
 use druid::widget::{Click, ControllerHost, Label, LabelText};
 use druid::{commands as sys_cmd, theme, Affine, Data, Insets, LinearGradient, UnitPoint, Color, Rect, WindowId, Selector};
-use image::{DynamicImage};
-use image::io::Reader;
-use screenshots::{Compression, Screen};
+use image::{DynamicImage, ImageFormat, RgbaImage};
+use screenshots::{Screen};
 use tracing::{instrument, trace};
 use crate::custom_widget::screenshot_image::UPDATE_SCREENSHOT;
 use crate::custom_widget::UPDATE_BACK_IMG;
-use crate::SCREENSHOT_PATH;
 
-pub const SAVE_SCREENSHOT: Selector<(Rect,WindowId,WidgetId,WidgetId,&str)> = Selector::new("Save the screenshot image, last param: where to save");
+pub const SAVE_SCREENSHOT: Selector<(Rect,WindowId,WidgetId,WidgetId,&'static str,Box<str>,ImageFormat)> = Selector::new("Save the screenshot image, last param: where to save");
 
 // the minimum padding added to a button.
 // NOTE: these values are chosen to match the existing look of TextBox; these
@@ -25,7 +21,7 @@ pub struct TakeScreenshotButton<T> {
     label: Label<T>,
     label_size: Size,
     color: Option<Color>,
-    taking_screenshot: Option<(Rect,WindowId,WidgetId,WidgetId,&'static str)>
+    taking_screenshot: Option<(Rect,WindowId,WidgetId,WidgetId,&'static str,Box<str>,ImageFormat)>
 }
 
 #[allow(dead_code)]
@@ -124,19 +120,19 @@ impl<T: Data> Widget<T> for TakeScreenshotButton<T> {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, _data: &mut T, _env: &Env) {
 
         if self.taking_screenshot.is_some(){
-            let (rect,main_window_id,custom_zstack_id,screenshot_id,save_path) = self.taking_screenshot.unwrap();
-            self.taking_screenshot = None;
-            let new_img = Arc::new(save_screenshot(&rect,save_path));
+            let (rect,main_window_id,custom_zstack_id,screenshot_id,path,file_name,file_format) = self.taking_screenshot.as_ref().unwrap();
+            let new_img = Arc::new(save_screenshot(&rect,path,file_name.clone(),*file_format));
             let main_id = main_window_id;
             ctx.get_external_handle()
-                .submit_command(sys_cmd::SHOW_WINDOW, (), main_id)
+                .submit_command(sys_cmd::SHOW_WINDOW, (), *main_id)
                 .expect("Error sending the event to the window");
             ctx.get_external_handle()
-                .submit_command(UPDATE_SCREENSHOT, new_img.clone(), screenshot_id)
+                .submit_command(UPDATE_SCREENSHOT, new_img.clone(), *screenshot_id)
                 .expect("Error sending the event to the screenshot widget");
             ctx.get_external_handle()
-                .submit_command(UPDATE_BACK_IMG,new_img,custom_zstack_id)
+                .submit_command(UPDATE_BACK_IMG,new_img,*custom_zstack_id)
                 .expect("Error sending the event to the screenshot widget");
+            self.taking_screenshot = None;
             ctx.window().close();
         }
 
@@ -144,8 +140,8 @@ impl<T: Data> Widget<T> for TakeScreenshotButton<T> {
             Event::Command(cmd) => {
                 if cmd.is(SAVE_SCREENSHOT) {
                     ctx.window().hide();
-                    let (rect,main_window_id,custom_zstack_id,screenshot_id,path) = cmd.get_unchecked(SAVE_SCREENSHOT);
-                    self.taking_screenshot = Some((*rect,*main_window_id,*custom_zstack_id,*screenshot_id,*path));
+                    let (rect,main_window_id,custom_zstack_id,screenshot_id,path,file_name,file_format) = cmd.get_unchecked(SAVE_SCREENSHOT);
+                    self.taking_screenshot = Some((*rect,*main_window_id,*custom_zstack_id,*screenshot_id,*path,file_name.clone(),*file_format));
                     ctx.request_layout();
                 }
             }
@@ -271,7 +267,7 @@ impl<T: Data> Widget<T> for TakeScreenshotButton<T> {
 }
 
 
-fn save_screenshot(rect: &Rect, path: &str) -> DynamicImage{
+fn save_screenshot(rect: &Rect, base_path: &str, file_name: Box<str>, format: ImageFormat) -> DynamicImage{
     //TODO:
     /* READ THIS TO IMPLEMENT MULTI-SCREEN GRABBING
     let screens = Screen::all().unwrap();
@@ -292,18 +288,12 @@ fn save_screenshot(rect: &Rect, path: &str) -> DynamicImage{
     println!("capturer {:?}",screen);
 
     let image = screen.capture_area(rect.x0 as i32, rect.y0 as i32, rect.width() as u32, rect.height() as u32).unwrap();
-    let buffer = image.to_png(Compression::Fast).unwrap();
+    let buffer = image.rgba();//to_png(Compression::Fast)
 
-    let mut file = File::create(path)
-        .expect(format!("Can't create or open the path: {}", path).as_str());
-    let mut buf_writer = BufWriter::new(&mut file);
-    buf_writer.write_all(buffer.as_slice())
-        .expect(format!("Can't write in the file: {}", path).as_str());
-    buf_writer.flush().expect(format!("Can't flush the file: {}", path).as_str());
-    //TODO: find a better way than save it and read again.
-    let screen_img = Reader::open(SCREENSHOT_PATH)
-        .expect("Can't open the screenshot!")
-        .decode()
-        .expect("Can't decode the screenshot");
-    screen_img
+    let dyn_img = DynamicImage::from(
+        RgbaImage::from_vec(image.width(),image.height(),buffer.clone()).unwrap()
+    );
+    let path = format!("{}{}.{}", base_path, file_name, format.extensions_str().first().unwrap());
+    dyn_img.save_with_format(path,format).unwrap();
+    dyn_img
 }

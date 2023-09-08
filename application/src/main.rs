@@ -4,9 +4,9 @@ use random_string::generate;
 use std::path::Path;
 use crate::custom_widget::{ColoredButton, CREATE_ZSTACK, CustomSlider, CustomZStack, OverImages, SAVE_OVER_IMG, SAVE_SCREENSHOT, ScreenshotImage, SelectedRect, SHOW_OVER_IMG, TakeScreenshotButton, UPDATE_BACK_IMG, UPDATE_COLOR};
 use druid::piet::ImageFormat;
-use druid::widget::{Align, Button, Click, Container, ControllerHost, Flex, IdentityWrapper, Label, LensWrap, Scroll, ViewSwitcher, ZStack};
+use druid::widget::{Align, Button, Click, Container, ControllerHost, Flex, IdentityWrapper, Label, LensWrap, Scroll, TextBox, ViewSwitcher, ZStack};
 use druid::Target::{Auto, Window};
-use druid::{commands as sys_cmd, AppLauncher, Color, Data, Env, EventCtx, FontDescriptor, FontFamily, ImageBuf, Lens, LocalizedString, Menu, Rect, Target, UnitPoint, Vec2, Widget, WidgetExt, WidgetId, WindowDesc, WindowId, WindowState, Point};
+use druid::{commands as sys_cmd, AppLauncher, Color, Data, Env, EventCtx, FontDescriptor, FontFamily, ImageBuf, Lens, LocalizedString, Menu, Rect, Target, UnitPoint, Vec2, Widget, WidgetExt, WidgetId, WindowDesc, WindowId, WindowState, Point, TextAlignment};
 use image::io::Reader;
 use std::sync::Arc;
 
@@ -15,7 +15,7 @@ use std::sync::Arc;
 //TODO: Error handling.
 
 
-const SCREENSHOT_PATH: &'static str = "./src/screenshots/screenshot.png";
+const STARTING_IMG_PATH: &'static str = "./src/images/starting_img.png";
 
 const WINDOW_TITLE: LocalizedString<AppState> = LocalizedString::new("Screen Grabbing Application");
 
@@ -29,6 +29,7 @@ struct AppState {
     rect: Rect,
     alpha: f64,
     extension: String,
+    name: String,
     #[data(ignore)]
     main_window_id: Option<WindowId>,
     #[data(ignore)]
@@ -56,6 +57,7 @@ fn main() {
         },
         alpha: 100.0,
         extension: "png".to_string(),
+        name: "".to_string(),
         main_window_id: None,
         custom_zstack_id: None,
         screenshot_id: None,
@@ -86,12 +88,15 @@ fn build_screenshot_widget() -> impl Widget<AppState> {
     )
     .with_color(Color::rgb8(70, 250, 70).with_alpha(1.))
     .on_click(|ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
+        let (base_path,name) = file_name(data.name.clone());
         ctx.submit_command(SAVE_SCREENSHOT.with((
             data.rect,
             data.main_window_id.expect("How did you open this window?"),
             data.custom_zstack_id.expect("How did you open this window?"),
             data.screenshot_id.expect("How did you open this window?"),
-            SCREENSHOT_PATH
+            base_path,
+            name,
+            image::ImageFormat::from_extension(data.extension.as_str()).unwrap(),
         )).to(Target::Widget(ctx.widget_id())));
     });
 
@@ -161,8 +166,8 @@ fn build_root_widget() -> impl Widget<AppState> {
             1usize,
             1usize,
         )).on_added(move |img, ctx,_data:&AppState, _env|{
-            if Path::new(SCREENSHOT_PATH).exists() {
-                let screen_img = Arc::new(Reader::open(SCREENSHOT_PATH)
+            if Path::new(STARTING_IMG_PATH).exists() {
+                let screen_img = Arc::new(Reader::open(STARTING_IMG_PATH)
                     .expect("Can't open the screenshot!")
                     .decode()
                     .expect("Can't decode the screenshot"));
@@ -188,6 +193,11 @@ fn build_root_widget() -> impl Widget<AppState> {
 
         });
     let spaced_zstack = Container::new(zstack).padding((10.0, 0.0));
+
+
+    let name_selector = TextBox::new()
+        .with_placeholder("file name").with_text_alignment(TextAlignment::Center)
+        .lens(AppState::name).border(Color::BLACK,2.);
 
     let extension_selector = ViewSwitcher::new(
         |data: &AppState, _env| data.clone(),
@@ -287,17 +297,9 @@ fn build_root_widget() -> impl Widget<AppState> {
         .with_child(Button::from_label(Label::new("Save")).on_click(
             move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
                 // TODO: use a meaningful name and extension
-                const BASE_PATH: &str = "./src/images/";
-                let charset = "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-                let mut name = generate(16, charset);
-                let mut path = format!("{}{}",BASE_PATH,name);
-                while Path::new(path.as_str()).exists(){
-                    name = generate(12, charset);
-                    path = format!("{}{}",BASE_PATH,name);
-                }
-                let name = format!("screenshot-{}",name).into_boxed_str();
+                let (base_path,name) = file_name(data.name.clone());
                 ctx.submit_command(SAVE_OVER_IMG.with((
-                    BASE_PATH,
+                    base_path,
                     name,
                     image::ImageFormat::from_extension(data.extension.as_str()).unwrap(),
                 )));
@@ -309,12 +311,14 @@ fn build_root_widget() -> impl Widget<AppState> {
 
     let scroll = Scroll::new(Flex::column()
         .with_default_spacer()
-        .with_child(Flex::row().with_child(buttons_bar.with_default_spacer().with_child(extension_selector)))
+        .with_child(Flex::row().with_child(buttons_bar.with_default_spacer()
+            .with_child(name_selector).with_default_spacer()
+            .with_child(extension_selector)))
         .with_default_spacer()
         //flex.set_must_fill_main_axis(true);
         .with_child(spaced_zstack)).vertical();
         //flex.set_main_axis_alignment(MainAxisAlignment::Center);
-    let layout = scroll.background(Color::WHITE).expand().padding(10.);
+    let layout = scroll.background(Color::WHITE).expand().padding(5.);
     layout
 }
 
@@ -390,4 +394,21 @@ fn create_color_button(color: Option<Color>,zstack_id: WidgetId) -> ControllerHo
             data.color = color;
             ctx.window().close();
         })
+}
+
+fn file_name(data_name: String) -> (&'static str,Box<str>){
+    const BASE_PATH: &'static str = "./src/screenshots/";
+    let charset = "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    let name = if data_name.as_str() == "" && data_name.chars().all(char::is_alphanumeric){
+        let mut name = generate(16, charset);
+        let mut path = format!("{}{}", BASE_PATH, name);
+        while Path::new(path.as_str()).exists() {
+            name = generate(12, charset);
+            path = format!("{}{}", BASE_PATH, name);
+        }
+        format!("screenshot-{}", name).into_boxed_str()
+    } else {
+        data_name.into_boxed_str()
+    };
+    (BASE_PATH,name)
 }
