@@ -46,7 +46,8 @@ fn main() {
     let main_window = WindowDesc::new(build_root_widget())
         .title("Welcome!")
         .menu(make_menu)
-        .window_size((1000., 640.));
+        .window_size((1000., 670.))
+        .set_position((50.,20.));
     // create the initial app state
     let initial_state = AppState {
         rect: Rect {

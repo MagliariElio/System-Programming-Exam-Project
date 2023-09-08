@@ -66,6 +66,7 @@ struct SliderKnob {
 }
 
 /// The shape of the slider knobs.
+#[allow(dead_code)]
 #[derive(Debug, Copy, Clone)]
 pub enum KnobStyle {
     /// Circle
@@ -79,7 +80,7 @@ impl Default for KnobStyle {
         Self::Circle
     }
 }
-
+#[allow(dead_code)]
 impl CustomSlider {
     /// Create a new `Slider`.
     pub fn new() -> CustomSlider {
@@ -220,7 +221,7 @@ impl Widget<f64> for CustomSlider {
         }
     }
 }
-
+#[allow(dead_code)]
 impl RangeSlider {
     /// Create a new `RangeSlider`.
     pub fn new() -> RangeSlider {
@@ -421,7 +422,7 @@ impl Widget<(f64, f64)> for RangeSlider {
         }
     }
 }
-
+#[allow(dead_code)]
 impl<T, W: Widget<T>> Annotated<T, W> {
     pub fn new(
         inner: W,
@@ -602,7 +603,7 @@ impl<T: Data, W: Widget<T>> Widget<T> for Annotated<T, W> {
         }
     }
 }
-
+#[allow(dead_code)]
 impl SliderValueMapping {
     pub fn new() -> Self {
         Self {
