@@ -18,9 +18,9 @@ pub enum OverImages{
     Highlighter
 }
 pub const UPDATE_BACK_IMG: Selector<Arc<DynamicImage>> = Selector::new("Update the back image");
-pub const UPDATE_COLOR: Selector<Option<Color>> = Selector::new("Update the over-img color");
+pub const UPDATE_COLOR: Selector<(Option<Color>,Option<f64>)> = Selector::new("Update the over-img color");
 pub const SHOW_OVER_IMG: Selector<OverImages> = Selector::new("Tell the ZStack to show the over_img, params: over_img path");
-pub const SAVE_OVER_IMG: Selector<(&str, &str, image::ImageFormat)> = Selector::new("Tell the ZStack to save the modified screenshot, params: (Screenshot original img's path, Folder Path Where To Save, New File Name, Image Format)");
+pub const SAVE_OVER_IMG: Selector<(&str, Box<str>, image::ImageFormat)> = Selector::new("Tell the ZStack to save the modified screenshot, params: (Screenshot original img's path, Folder Path Where To Save, New File Name, Image Format)");
 pub const CREATE_ZSTACK: Selector<Vec<&'static str>> = Selector::new("Initialized the over-images");
 /// A container that stacks its children on top of each other.
 ///
@@ -31,7 +31,7 @@ pub struct CustomZStack<T> {
     back_img: Option<DynamicImage>,
     back_img_origin: Option<Point>,
     screenshot_id: WidgetId,
-    color:Option<Color>,
+    color:(Option<Color>,f64),
     over_images: Option<Vec<DynamicImage>>,
     showing_over_img: Option<usize>,
 }
@@ -60,7 +60,7 @@ impl <T: Data> CustomZStack<T>  {
             back_img: None,
             back_img_origin: None,
             screenshot_id,
-            color: None,
+            color: (None,100.),
             over_images: None,
             showing_over_img: None,
         }
@@ -125,21 +125,7 @@ impl <T: Data> CustomZStack<T>  {
         if self.showing_over_img.is_none() {
             //TODO: Make this async! (Rust seams to don't have a stream management lib, I don't want to implement it!)
             let img = self.over_images.as_mut().unwrap().get_mut(over_img_index).unwrap();
-            if self.color.is_some() {
-                let color = self.color.unwrap().as_rgba8();
-                for j in 0..img.height() {
-                    for i in 0..img.width() {
-                        let mut cur_px = img.get_pixel(i, j);
-                        let ch = cur_px.channels_mut();
-                        if ch[3] > 0 {
-                            ch[0] = color.0;
-                            ch[1] = color.1;
-                            ch[2] = color.2;
-                            img.put_pixel(i,j,cur_px);
-                        }
-                    }
-                }
-            }
+
             let over_image = ResizableBox::new(Image::new(ImageBuf::from_raw(
                 Arc::<[u8]>::from(img.as_bytes()), ImageFormat::RgbaSeparate, img.width() as usize, img.height() as usize
             )),id).height(50.).width(50.);
@@ -231,8 +217,35 @@ impl<T: Data> Widget<T> for CustomZStack<T> {
                     let new_origin = cmd.get_unchecked(UPDATE_ORIGIN);
                     self.back_img_origin = Some(*new_origin);
                 } else if cmd.is(UPDATE_COLOR){
-                    let color = cmd.get_unchecked(UPDATE_COLOR);
-                    self.color = *color;
+                    let (color,alpha) = cmd.get_unchecked(UPDATE_COLOR);
+                    if color.is_some() {
+                        self.color.0 = Some(color.unwrap());
+                    }
+                    if alpha.is_some(){
+                        self.color.1 = alpha.unwrap();
+                    }
+                    //update images color
+                    if self.over_images.is_some() {
+                        self.over_images.as_mut().unwrap().iter_mut().for_each(|img| {
+                            let (color, alpha) = self.color;
+                            for j in 0..img.height() {
+                                for i in 0..img.width() {
+                                    let mut cur_px = img.get_pixel(i, j);
+                                    let ch = cur_px.channels_mut();
+                                    if ch[3] > 0 {
+                                        if color.is_some() {
+                                            let color = color.unwrap().as_rgba8();
+                                            ch[0] = color.0;
+                                            ch[1] = color.1;
+                                            ch[2] = color.2;
+                                        }
+                                        ch[3] = ((alpha / 100.) * u8::MAX as f64) as u8;
+                                        img.put_pixel(i, j, cur_px);
+                                    }
+                                }
+                            }
+                        });
+                    }
                     if self.showing_over_img.is_some(){
                         self.rm_over_img();
                     }

@@ -1,11 +1,12 @@
 mod custom_widget;
 
+use random_string::generate;
 use std::path::Path;
-use crate::custom_widget::{ColoredButton, CREATE_ZSTACK, CustomZStack, OverImages, SAVE_OVER_IMG, SAVE_SCREENSHOT, ScreenshotImage, SelectedRect, SHOW_OVER_IMG, TakeScreenshotButton, UPDATE_BACK_IMG, UPDATE_COLOR};
+use crate::custom_widget::{ColoredButton, CREATE_ZSTACK, CustomSlider, CustomZStack, OverImages, SAVE_OVER_IMG, SAVE_SCREENSHOT, ScreenshotImage, SelectedRect, SHOW_OVER_IMG, TakeScreenshotButton, UPDATE_BACK_IMG, UPDATE_COLOR};
 use druid::piet::ImageFormat;
-use druid::widget::{Align, Button, Click, Container, ControllerHost, Flex, IdentityWrapper, Label, LensWrap, MainAxisAlignment, ZStack};
+use druid::widget::{Align, Button, Click, Container, ControllerHost, Flex, IdentityWrapper, Label, LensWrap, Scroll, TextBox, ViewSwitcher, ZStack};
 use druid::Target::{Auto, Window};
-use druid::{commands as sys_cmd, AppLauncher, Color, Data, Env, EventCtx, FontDescriptor, FontFamily, ImageBuf, Lens, LocalizedString, Menu, Rect, Target, UnitPoint, Vec2, Widget, WidgetExt, WidgetId, WindowDesc, WindowId, WindowState, Point};
+use druid::{commands as sys_cmd, AppLauncher, Color, Data, Env, EventCtx, FontDescriptor, FontFamily, ImageBuf, Lens, LocalizedString, Menu, Rect, Target, UnitPoint, Vec2, Widget, WidgetExt, WidgetId, WindowDesc, WindowId, WindowState, Point, TextAlignment};
 use image::io::Reader;
 use std::sync::Arc;
 
@@ -14,7 +15,7 @@ use std::sync::Arc;
 //TODO: Error handling.
 
 
-const SCREENSHOT_PATH: &'static str = "./src/screenshots/screenshot.png";
+const STARTING_IMG_PATH: &'static str = "./src/images/starting_img.png";
 
 const WINDOW_TITLE: LocalizedString<AppState> = LocalizedString::new("Screen Grabbing Application");
 
@@ -26,6 +27,9 @@ const Y1: f64 = 1080.; // 500.
 #[derive(Clone, Data, Lens)]
 struct AppState {
     rect: Rect,
+    alpha: f64,
+    extension: String,
+    name: String,
     #[data(ignore)]
     main_window_id: Option<WindowId>,
     #[data(ignore)]
@@ -51,6 +55,9 @@ fn main() {
             x1: X1,
             y1: Y1,
         },
+        alpha: 100.0,
+        extension: "png".to_string(),
+        name: "".to_string(),
         main_window_id: None,
         custom_zstack_id: None,
         screenshot_id: None,
@@ -81,12 +88,15 @@ fn build_screenshot_widget() -> impl Widget<AppState> {
     )
     .with_color(Color::rgb8(70, 250, 70).with_alpha(1.))
     .on_click(|ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
+        let (base_path,name) = file_name(data.name.clone());
         ctx.submit_command(SAVE_SCREENSHOT.with((
             data.rect,
             data.main_window_id.expect("How did you open this window?"),
             data.custom_zstack_id.expect("How did you open this window?"),
             data.screenshot_id.expect("How did you open this window?"),
-            SCREENSHOT_PATH
+            base_path,
+            name,
+            image::ImageFormat::from_extension(data.extension.as_str()).unwrap(),
         )).to(Target::Widget(ctx.widget_id())));
     });
 
@@ -153,11 +163,11 @@ fn build_root_widget() -> impl Widget<AppState> {
         ScreenshotImage::new(ImageBuf::from_raw(
             Arc::<[u8]>::from(Vec::from([0,0,0,0]).as_slice()),
             ImageFormat::RgbaSeparate,
-            1 as usize,
-            1 as usize,
+            1usize,
+            1usize,
         )).on_added(move |img, ctx,_data:&AppState, _env|{
-            if Path::new(SCREENSHOT_PATH).exists() {
-                let screen_img = Arc::new(Reader::open(SCREENSHOT_PATH)
+            if Path::new(STARTING_IMG_PATH).exists() {
+                let screen_img = Arc::new(Reader::open(STARTING_IMG_PATH)
                     .expect("Can't open the screenshot!")
                     .decode()
                     .expect("Can't decode the screenshot"));
@@ -183,6 +193,37 @@ fn build_root_widget() -> impl Widget<AppState> {
 
         });
     let spaced_zstack = Container::new(zstack).padding((10.0, 0.0));
+
+
+    let name_selector = TextBox::new()
+        .with_placeholder("file name").with_text_alignment(TextAlignment::Center)
+        .lens(AppState::name).border(Color::BLACK,2.);
+
+    let extension_selector = ViewSwitcher::new(
+        |data: &AppState, _env| data.clone(),
+        |selector, _data, _env| match selector.extension.as_str() {
+            "png" => Box::new(Label::new("PNG").with_text_color(Color::BLACK)
+                .border(Color::BLACK,2.)
+                .on_click(|_,data: &mut AppState,_| data.extension = String::from(""))),
+            "jpg" => Box::new(Label::new("JPG").with_text_color(Color::BLACK)
+                .border(Color::BLACK,2.)
+                .on_click(|_,data: &mut AppState,_| data.extension = String::from(""))),
+            "gif" => Box::new(Label::new("GIF").with_text_color(Color::BLACK)
+                .border(Color::BLACK,2.)
+                .on_click(|_,data: &mut AppState,_| data.extension = String::from(""))),
+            _ => Box::new(Scroll::new(
+                Flex::column()
+                    .with_child(Label::new("PNG").with_text_color(Color::BLACK)
+                        .border(Color::BLACK,2.)
+                        .on_click(|_,data: &mut AppState,_| data.extension = String::from("png")))
+                    .with_child(Label::new("JPG").with_text_color(Color::BLACK)
+                        .border(Color::BLACK,2.)
+                        .on_click(|_,data: &mut AppState,_| data.extension = String::from("jpg")))
+                    .with_child(Label::new("GIF").with_text_color(Color::BLACK)
+                        .border(Color::BLACK,2.)
+                        .on_click(|_,data: &mut AppState,_| data.extension = String::from("gif"))))
+                .border(Color::BLACK,4.))
+        },);
 
     let buttons_bar = Flex::row()
         .with_default_spacer()
@@ -236,7 +277,7 @@ fn build_root_widget() -> impl Widget<AppState> {
                         .set_always_on_top(true)
                         .show_titlebar(false)
                         .set_window_state(WindowState::Restored)
-                        .window_size((1., 180.))
+                        .window_size((1., 250.))
                         .set_position(init_pos)
                         .resizable(false)
                         .transparent(false);
@@ -254,27 +295,30 @@ fn build_root_widget() -> impl Widget<AppState> {
         ))
         .with_default_spacer()
         .with_child(Button::from_label(Label::new("Save")).on_click(
-            move |ctx: &mut EventCtx, _data: &mut AppState, _env: &Env| {
+            move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
                 // TODO: use a meaningful name and extension
+                let (base_path,name) = file_name(data.name.clone());
                 ctx.submit_command(SAVE_OVER_IMG.with((
-                    "./src/images/",
-                    "screenshot",
-                    image::ImageFormat::Png,
+                    base_path,
+                    name,
+                    image::ImageFormat::from_extension(data.extension.as_str()).unwrap(),
                 )));
             },
         ))
         .with_default_spacer()
         .with_flex_child(Container::new(take_screenshot_button), 1.0);
 
-    let mut flex = Flex::column();
-    flex.add_default_spacer();
-    flex.add_child(buttons_bar);
-    flex.add_default_spacer();
-    flex.set_must_fill_main_axis(true);
-    flex.add_child(spaced_zstack);
-    flex.add_default_spacer();
-    flex.set_main_axis_alignment(MainAxisAlignment::Center);
-    let layout = flex.background(Color::SILVER);
+
+    let scroll = Scroll::new(Flex::column()
+        .with_default_spacer()
+        .with_child(Flex::row().with_child(buttons_bar.with_default_spacer()
+            .with_child(name_selector).with_default_spacer()
+            .with_child(extension_selector)))
+        .with_default_spacer()
+        //flex.set_must_fill_main_axis(true);
+        .with_child(spaced_zstack)).vertical();
+        //flex.set_main_axis_alignment(MainAxisAlignment::Center);
+    let layout = scroll.background(Color::WHITE).expand().padding(5.);
     layout
 }
 
@@ -324,11 +368,19 @@ fn build_colors_window(zstack_id: WidgetId) -> impl Widget<AppState>{
     let yellow = create_color_button(Some(Color::YELLOW),zstack_id);
     let silver = create_color_button(Some(Color::SILVER),zstack_id);
 
+    let label = Label::new("Transparency:").with_text_color(Color::WHITE);
+    let alpha_slider = CustomSlider::new().with_range(1.,100.).with_step(1.)
+        .on_added(move |this,_ctx,_data,_env|{
+            this.set_zstack_id(zstack_id);
+        })
+        .lens(AppState::alpha).padding(5.0);
+
     let flex = Flex::column().with_default_spacer().with_child(none).with_default_spacer()
         .with_child(Flex::row().with_default_spacer().with_child(green).with_default_spacer().with_child(red).with_default_spacer().with_child(black).with_default_spacer().with_child(white).with_default_spacer()).with_default_spacer()
         .with_child(Flex::row().with_default_spacer().with_child(aqua).with_default_spacer().with_child(gray).with_default_spacer().with_child(blue).with_default_spacer().with_child(fuchsia).with_default_spacer()).with_default_spacer()
         .with_child(Flex::row().with_default_spacer().with_child(lime).with_default_spacer().with_child(maroon).with_default_spacer().with_child(navy).with_default_spacer().with_child(olive).with_default_spacer()).with_default_spacer()
         .with_child(Flex::row().with_default_spacer().with_child(purple).with_default_spacer().with_child(teal).with_default_spacer().with_child(yellow).with_default_spacer().with_child(silver).with_default_spacer()).with_default_spacer()
+        .with_default_spacer().with_child(Flex::row().with_child(label)).with_child(Flex::row().with_child(alpha_slider))
         .background(Color::BLACK.with_alpha(0.3));
 
     Align::centered(flex)
@@ -338,8 +390,25 @@ fn create_color_button(color: Option<Color>,zstack_id: WidgetId) -> ControllerHo
     ColoredButton::from_label(Label::new(if color.is_some(){" "} else{"None"}))
         .with_color(color.unwrap_or(Color::SILVER.with_alpha(0.8)))
         .on_click(move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env|{
-            ctx.get_external_handle().submit_command(UPDATE_COLOR,color,Target::Widget(zstack_id)).unwrap();
+            ctx.get_external_handle().submit_command(UPDATE_COLOR,(color,None),Target::Widget(zstack_id)).unwrap();
             data.color = color;
             ctx.window().close();
         })
+}
+
+fn file_name(data_name: String) -> (&'static str,Box<str>){
+    const BASE_PATH: &'static str = "./src/screenshots/";
+    let charset = "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    let name = if data_name.as_str() == "" && data_name.chars().all(char::is_alphanumeric){
+        let mut name = generate(16, charset);
+        let mut path = format!("{}{}", BASE_PATH, name);
+        while Path::new(path.as_str()).exists() {
+            name = generate(12, charset);
+            path = format!("{}{}", BASE_PATH, name);
+        }
+        format!("screenshot-{}", name).into_boxed_str()
+    } else {
+        data_name.into_boxed_str()
+    };
+    (BASE_PATH,name)
 }
