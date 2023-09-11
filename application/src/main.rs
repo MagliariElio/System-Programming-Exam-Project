@@ -2,9 +2,9 @@ mod custom_widget;
 
 use random_string::generate;
 use std::path::Path;
-use crate::custom_widget::{ColoredButton, CREATE_ZSTACK, CustomSlider, CustomZStack, OverImages, SAVE_OVER_IMG, SAVE_SCREENSHOT, ScreenshotImage, SelectedRect, SHOW_OVER_IMG, TakeScreenshotButton, UPDATE_BACK_IMG, UPDATE_COLOR};
+use crate::custom_widget::{ColoredButton, CREATE_ZSTACK, CustomSlider, CustomZStack, DELAY_SCREENSHOT, DelayButton, OverImages, SAVE_OVER_IMG, SAVE_SCREENSHOT, ScreenshotImage, SelectedRect, SHOW_OVER_IMG, TakeScreenshotButton, UPDATE_BACK_IMG, UPDATE_COLOR};
 use druid::piet::ImageFormat;
-use druid::widget::{Align, Button, Click, Container, ControllerHost, Flex, IdentityWrapper, Label, LensWrap, Scroll, TextBox, ViewSwitcher, ZStack};
+use druid::widget::{Align, Button, Click, Container, ControllerHost, Flex, IdentityWrapper, Label, LensWrap, Scroll, Stepper, TextBox, ViewSwitcher, ZStack};
 use druid::Target::{Auto, Window};
 use druid::{commands as sys_cmd, AppLauncher, Color, Data, Env, EventCtx, FontDescriptor, FontFamily, ImageBuf, Lens, LocalizedString, Menu, Rect, Target, UnitPoint, Vec2, Widget, WidgetExt, WidgetId, WindowDesc, WindowId, WindowState, Point, TextAlignment};
 use image::io::Reader;
@@ -30,6 +30,7 @@ struct AppState {
     alpha: f64,
     extension: String,
     name: String,
+    delay: f64,
     #[data(ignore)]
     main_window_id: Option<WindowId>,
     #[data(ignore)]
@@ -46,7 +47,8 @@ fn main() {
     let main_window = WindowDesc::new(build_root_widget())
         .title("Welcome!")
         .menu(make_menu)
-        .window_size((1000., 640.));
+        .window_size((1000., 670.))
+        .set_position((50.,20.));
     // create the initial app state
     let initial_state = AppState {
         rect: Rect {
@@ -58,6 +60,7 @@ fn main() {
         alpha: 100.0,
         extension: "png".to_string(),
         name: "".to_string(),
+        delay: 1.0,
         main_window_id: None,
         custom_zstack_id: None,
         screenshot_id: None,
@@ -100,6 +103,33 @@ fn build_screenshot_widget() -> impl Widget<AppState> {
         )).to(Target::Widget(ctx.widget_id())));
     });
 
+    let delay_button = DelayButton::from_label(
+        Label::new("Delay")
+            .with_text_color(Color::BLACK)
+            .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
+            .with_text_size(20.)
+    ).with_color(Color::YELLOW)
+        .on_click(|ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
+            let (base_path, name) = file_name(data.name.clone());
+            ctx.submit_command(DELAY_SCREENSHOT.with((
+                data.rect,
+                data.main_window_id.expect("How did you open this window?"),
+                data.custom_zstack_id.expect("How did you open this window?"),
+                data.screenshot_id.expect("How did you open this window?"),
+                base_path,
+                name,
+                image::ImageFormat::from_extension(data.extension.as_str()).unwrap(),
+                data.delay as u64,
+            )).to(Target::Widget(ctx.widget_id())));
+        });
+
+    let delay_value = Label::dynamic(|data: &AppState,_env|{
+        data.delay.to_string()
+    }).with_text_color(Color::WHITE).background(Color::BLACK.with_alpha(0.55));
+    let delay_stepper = Stepper::new().with_range(1.0, 20.0).with_step(1.0)
+        .with_wraparound(true)
+        .lens(AppState::delay);
+
     let close_button = ColoredButton::from_label(
         Label::new("Close")
             .with_text_color(Color::BLACK)
@@ -117,6 +147,10 @@ fn build_screenshot_widget() -> impl Widget<AppState> {
 
     let buttons_flex = Flex::row()
         .with_child(take_screenshot_button)
+        .with_default_spacer()
+        .with_child(delay_button)
+        .with_child(delay_value)
+        .with_child(delay_stepper)
         .with_default_spacer()
         .with_child(close_button);
 

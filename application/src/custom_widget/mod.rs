@@ -6,6 +6,7 @@ mod screenshot_image;
 mod take_screenshot_button;
 mod resizable_box;
 mod custom_slider;
+mod delay_button;
 
 pub use colored_button::ColoredButton;
 pub use selected_rect::SelectedRect;
@@ -14,4 +15,5 @@ pub use screenshot_image::{ScreenshotImage,UPDATE_SCREENSHOT};
 pub use take_screenshot_button::{TakeScreenshotButton,SAVE_SCREENSHOT};
 pub use resizable_box::{ResizableBox,UPDATE_ORIGIN};
 pub use custom_slider::CustomSlider;
+pub use delay_button::{DelayButton,DELAY_SCREENSHOT};
 
