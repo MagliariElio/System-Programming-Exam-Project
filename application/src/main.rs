@@ -6,7 +6,7 @@ use crate::custom_widget::{ColoredButton, CREATE_ZSTACK, CustomSlider, CustomZSt
 use druid::piet::ImageFormat;
 use druid::widget::{Align, Button, Click, Container, ControllerHost, Flex, IdentityWrapper, Label, LensWrap, Scroll, Stepper, TextBox, ViewSwitcher, ZStack};
 use druid::Target::{Auto, Window};
-use druid::{commands as sys_cmd, AppLauncher, Color, Data, Env, EventCtx, FontDescriptor, FontFamily, ImageBuf, Lens, LocalizedString, Menu, Rect, Target, UnitPoint, Vec2, Widget, WidgetExt, WidgetId, WindowDesc, WindowId, WindowState, Point, TextAlignment};
+use druid::{commands as sys_cmd, AppLauncher, Color, Data, Env, EventCtx, FontDescriptor, FontFamily, ImageBuf, Lens, LocalizedString, Menu, Rect, Target, UnitPoint, Vec2, Widget, WidgetExt, WidgetId, WindowDesc, WindowId, WindowState, Point, TextAlignment, Screen};
 use image::io::Reader;
 use std::sync::Arc;
 
@@ -31,6 +31,7 @@ struct AppState {
     extension: String,
     name: String,
     delay: f64,
+    screen: String,
     #[data(ignore)]
     main_window_id: Option<WindowId>,
     #[data(ignore)]
@@ -61,6 +62,7 @@ fn main() {
         extension: "png".to_string(),
         name: "".to_string(),
         delay: 1.0,
+        screen: "0".to_string(),
         main_window_id: None,
         custom_zstack_id: None,
         screenshot_id: None,
@@ -76,12 +78,9 @@ fn main() {
 
 
 
-fn build_screenshot_widget() -> impl Widget<AppState> {
-    let rectangle = LensWrap::new(SelectedRect::new(), AppState::rect);
+fn build_screenshot_widget(monitor: usize) -> impl Widget<AppState> {
 
-    /*let label = Label::new(|data: &AppState, _env: &Env|
-    format!("Resize and drag as you like.\n- Top Left: ({}, {})\n- Bottom Right: ({}, {})",
-            data.rect.x0, data.rect.y0, data.rect.x1, data.rect.y1));*/
+    let rectangle = LensWrap::new(SelectedRect::new(monitor), AppState::rect);
 
     let take_screenshot_button = TakeScreenshotButton::from_label(
         Label::new("Take Screenshot")
@@ -99,7 +98,8 @@ fn build_screenshot_widget() -> impl Widget<AppState> {
             data.screenshot_id.expect("How did you open this window?"),
             base_path,
             name,
-            image::ImageFormat::from_extension(data.extension.as_str()).unwrap(),
+            image::ImageFormat::from_extension(data.extension.trim_start_matches(".")).unwrap(),
+            std::str::FromStr::from_str(data.screen.trim_start_matches(".")).unwrap(),
         )).to(Target::Widget(ctx.widget_id())));
     });
 
@@ -118,8 +118,9 @@ fn build_screenshot_widget() -> impl Widget<AppState> {
                 data.screenshot_id.expect("How did you open this window?"),
                 base_path,
                 name,
-                image::ImageFormat::from_extension(data.extension.as_str()).unwrap(),
+                image::ImageFormat::from_extension(data.extension.trim_start_matches(".")).unwrap(),
                 data.delay as u64,
+                std::str::FromStr::from_str(data.screen.trim_start_matches(".")).unwrap(),
             )).to(Target::Widget(ctx.widget_id())));
         });
 
@@ -175,20 +176,25 @@ fn build_screenshot_widget() -> impl Widget<AppState> {
 fn build_root_widget() -> impl Widget<AppState> {
     let screenshot_widget_id = WidgetId::next();
     let zstack_id = WidgetId::next();
-    let take_screenshot_button = Button::from_label(Label::new("Take Screenshoot")).on_click(
+    let take_screenshot_button = ColoredButton::from_label(Label::new("Take Screenshoot"))
+        .with_color(Color::rgb(160./256.,0.,0.)).on_click(
         move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
             data.main_window_id = Some(ctx.window_id());
             data.custom_zstack_id = Some(zstack_id);
             data.screenshot_id = Some(screenshot_widget_id);
             ctx.submit_command(sys_cmd::HIDE_WINDOW.to(Auto));
+            let monitors =  Screen::get_monitors();
+            let index: usize = std::str::FromStr::from_str(data.screen.trim_start_matches(".")).unwrap();
+            let monitor = monitors.get(index).unwrap();
             ctx.new_window(
-                WindowDesc::new(build_screenshot_widget())
+                WindowDesc::new(build_screenshot_widget(index))
                     .title(WINDOW_TITLE)
                     .set_always_on_top(true)
                     .transparent(true)
                     .resizable(false)
                     .show_titlebar(false)
                     .set_window_state(WindowState::Maximized)
+                    .set_position(monitor.virtual_rect().origin())
             )
         },
     );
@@ -231,33 +237,68 @@ fn build_root_widget() -> impl Widget<AppState> {
 
     let name_selector = TextBox::new()
         .with_placeholder("file name").with_text_alignment(TextAlignment::Center)
-        .lens(AppState::name).border(Color::BLACK,2.);
+        .lens(AppState::name);
 
     let extension_selector = ViewSwitcher::new(
         |data: &AppState, _env| data.clone(),
         |selector, _data, _env| match selector.extension.as_str() {
-            "png" => Box::new(Label::new("PNG").with_text_color(Color::BLACK)
+            "png" => Box::new(Label::new("PNG ▼").with_text_color(Color::BLACK)
                 .border(Color::BLACK,2.)
-                .on_click(|_,data: &mut AppState,_| data.extension = String::from(""))),
-            "jpg" => Box::new(Label::new("JPG").with_text_color(Color::BLACK)
+                .on_click(|_,data: &mut AppState,_| data.extension = String::from(".png"))),
+            "jpg" => Box::new(Label::new("JPG ▼").with_text_color(Color::BLACK)
                 .border(Color::BLACK,2.)
-                .on_click(|_,data: &mut AppState,_| data.extension = String::from(""))),
-            "gif" => Box::new(Label::new("GIF").with_text_color(Color::BLACK)
+                .on_click(|_,data: &mut AppState,_| data.extension = String::from(".jpg"))),
+            "gif" => Box::new(Label::new("GIF ▼").with_text_color(Color::BLACK)
                 .border(Color::BLACK,2.)
-                .on_click(|_,data: &mut AppState,_| data.extension = String::from(""))),
-            _ => Box::new(Scroll::new(
-                Flex::column()
-                    .with_child(Label::new("PNG").with_text_color(Color::BLACK)
-                        .border(Color::BLACK,2.)
-                        .on_click(|_,data: &mut AppState,_| data.extension = String::from("png")))
-                    .with_child(Label::new("JPG").with_text_color(Color::BLACK)
-                        .border(Color::BLACK,2.)
-                        .on_click(|_,data: &mut AppState,_| data.extension = String::from("jpg")))
-                    .with_child(Label::new("GIF").with_text_color(Color::BLACK)
-                        .border(Color::BLACK,2.)
-                        .on_click(|_,data: &mut AppState,_| data.extension = String::from("gif"))))
-                .border(Color::BLACK,4.))
+                .on_click(|_,data: &mut AppState,_| data.extension = String::from(".gif"))),
+            _ => {
+                let text_alpha = match selector.extension.as_str(){
+                    ".png" => (1f64,0.4f64,0.4f64),
+                    ".jpg" => (0.4f64,1f64,0.4f64),
+                    ".gif" => (0.4f64,0.4f64,1f64),
+                    _ => panic!(),
+                };
+                Box::new(Scroll::new(
+                    Flex::column()
+                        .with_child(Label::new("PNG").with_text_color(Color::BLACK.with_alpha(text_alpha.0))
+                            .border(Color::BLACK.with_alpha(text_alpha.0), 2.).fix_size(40., 27.)
+                            .on_click(|_, data: &mut AppState, _| data.extension = String::from("png")))
+                        .with_child(Label::new("JPG").with_text_color(Color::BLACK.with_alpha(text_alpha.1))
+                            .border(Color::BLACK.with_alpha(text_alpha.1), 2.).fix_size(40., 27.)
+                            .on_click(|_, data: &mut AppState, _| data.extension = String::from("jpg")))
+                        .with_child(Label::new("GIF").with_text_color(Color::BLACK.with_alpha(text_alpha.2))
+                            .border(Color::BLACK.with_alpha(text_alpha.2), 2.).fix_size(40., 27.)
+                            .on_click(|_, data: &mut AppState, _| data.extension = String::from("gif"))))
+                    .border(Color::BLACK.with_alpha(0.6), 4.))
+            }
         },);
+
+    let screen_selector = ViewSwitcher::new(
+        |data: &AppState, _env| data.clone(),
+        |selector, data: &AppState, _env| if selector.screen.chars().all(char::is_numeric) {
+            Box::new(Label::new(format!("{} ▼",data.screen)).with_text_color(Color::BLACK)
+                .border(Color::BLACK, 2.)
+                .on_click(|_, data: &mut AppState, _| data.screen = format!(".{}",data.screen)))
+            } else {
+                let screens = Screen::get_monitors();
+                let dim = screens.len();
+                let number: u8 = std::str::FromStr::from_str(selector.screen.trim_start_matches(".")).unwrap();
+                let mut flex = Flex::column();
+                for i in 0..dim{
+                    let color =
+                        if i == number as usize {
+                            Color::BLACK.with_alpha(1.)
+                        } else {
+                            Color::BLACK.with_alpha(0.4)
+                        };
+                    flex.add_child( Label::new(format!("{} ◀",i)).with_text_color(color)
+                        .border(color, 2.)
+                        .on_click(move |_, data: &mut AppState, _| data.screen = format!("{}",i)) );
+                }
+
+                Box::new(Scroll::new(flex).border(Color::BLACK.with_alpha(0.6), 4.))
+
+        });
 
     let buttons_bar = Flex::row()
         .with_default_spacer()
@@ -301,7 +342,8 @@ fn build_root_widget() -> impl Widget<AppState> {
             }
         ))
         .with_default_spacer()
-        .with_child(Button::from_label(Label::new("Color")).on_click(
+        .with_child(ColoredButton::from_label(Label::new("Color")).with_color(Color::PURPLE)
+            .on_click(
             move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
                 if data.colors_window_opened.is_none() {
                     let mut init_pos = ctx.to_screen(Point::new(1.,ctx.size().height-1.));
@@ -327,27 +369,33 @@ fn build_root_widget() -> impl Widget<AppState> {
                 }
             }
         ))
+        .with_spacer(40.)
+        .with_child(name_selector)
         .with_default_spacer()
-        .with_child(Button::from_label(Label::new("Save")).on_click(
+        .with_child(extension_selector)
+        .with_default_spacer()
+        .with_child(ColoredButton::from_label(Label::new("Save")).with_color(Color::rgb(0.,120./256.,0.)).on_click(
             move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
-                // TODO: use a meaningful name and extension
+
                 let (base_path,name) = file_name(data.name.clone());
                 ctx.submit_command(SAVE_OVER_IMG.with((
                     base_path,
                     name,
-                    image::ImageFormat::from_extension(data.extension.as_str()).unwrap(),
+                    image::ImageFormat::from_extension(data.extension.trim_start_matches(".")).unwrap(),
                 )));
             },
         ))
+        .with_spacer(40.)
+        .with_flex_child(Container::new(take_screenshot_button), 1.0)
         .with_default_spacer()
-        .with_flex_child(Container::new(take_screenshot_button), 1.0);
+        .with_child(Label::new("Select Screen:").with_text_color(Color::BLACK.with_alpha(0.85)))
+        .with_default_spacer()
+        .with_child(screen_selector);
 
 
     let scroll = Scroll::new(Flex::column()
         .with_default_spacer()
-        .with_child(Flex::row().with_child(buttons_bar.with_default_spacer()
-            .with_child(name_selector).with_default_spacer()
-            .with_child(extension_selector)))
+        .with_child(Flex::row().with_child(buttons_bar))
         .with_default_spacer()
         //flex.set_must_fill_main_axis(true);
         .with_child(spaced_zstack)).vertical();
