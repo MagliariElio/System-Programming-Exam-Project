@@ -9,7 +9,7 @@ use tracing::{instrument, trace};
 use crate::custom_widget::screenshot_image::UPDATE_SCREENSHOT;
 use crate::custom_widget::UPDATE_BACK_IMG;
 
-pub const SAVE_SCREENSHOT: Selector<(Rect,WindowId,WidgetId,WidgetId,&'static str,Box<str>,ImageFormat)> = Selector::new("Save the screenshot image, last param: where to save");
+pub const SAVE_SCREENSHOT: Selector<(Rect,WindowId,WidgetId,WidgetId,&'static str,Box<str>,ImageFormat,u8)> = Selector::new("Save the screenshot image, last param: where to save");
 
 // the minimum padding added to a button.
 // NOTE: these values are chosen to match the existing look of TextBox; these
@@ -21,7 +21,7 @@ pub struct TakeScreenshotButton<T> {
     label: Label<T>,
     label_size: Size,
     color: Option<Color>,
-    taking_screenshot: Option<(Rect,WindowId,WidgetId,WidgetId,&'static str,Box<str>,ImageFormat)>
+    taking_screenshot: Option<(Rect,WindowId,WidgetId,WidgetId,&'static str,Box<str>,ImageFormat,u8)>,
 }
 
 #[allow(dead_code)]
@@ -120,8 +120,8 @@ impl<T: Data> Widget<T> for TakeScreenshotButton<T> {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, _data: &mut T, _env: &Env) {
 
         if self.taking_screenshot.is_some(){
-            let (rect,main_window_id,custom_zstack_id,screenshot_id,path,file_name,file_format) = self.taking_screenshot.as_ref().unwrap();
-            let new_img = Arc::new(save_screenshot(&rect,path,file_name.clone(),*file_format));
+            let (rect,main_window_id,custom_zstack_id,screenshot_id,path,file_name,file_format, monitor) = self.taking_screenshot.as_ref().unwrap();
+            let new_img = Arc::new(save_screenshot(&rect,path,file_name.clone(),*file_format, *monitor as usize));
             let main_id = main_window_id;
             ctx.get_external_handle()
                 .submit_command(sys_cmd::SHOW_WINDOW, (), *main_id)
@@ -140,8 +140,8 @@ impl<T: Data> Widget<T> for TakeScreenshotButton<T> {
             Event::Command(cmd) => {
                 if cmd.is(SAVE_SCREENSHOT) {
                     ctx.window().hide();
-                    let (rect,main_window_id,custom_zstack_id,screenshot_id,path,file_name,file_format) = cmd.get_unchecked(SAVE_SCREENSHOT);
-                    self.taking_screenshot = Some((*rect,*main_window_id,*custom_zstack_id,*screenshot_id,*path,file_name.clone(),*file_format));
+                    let (rect,main_window_id,custom_zstack_id,screenshot_id,path,file_name,file_format, monitor) = cmd.get_unchecked(SAVE_SCREENSHOT);
+                    self.taking_screenshot = Some((*rect,*main_window_id,*custom_zstack_id,*screenshot_id,*path,file_name.clone(),*file_format,*monitor));
                     ctx.request_layout();
                 }
             }
@@ -267,26 +267,14 @@ impl<T: Data> Widget<T> for TakeScreenshotButton<T> {
 }
 
 
-fn save_screenshot(rect: &Rect, base_path: &str, file_name: Box<str>, format: ImageFormat) -> DynamicImage{
-    //TODO:
-    /* READ THIS TO IMPLEMENT MULTI-SCREEN GRABBING
+fn save_screenshot(rect: &Rect, base_path: &str, file_name: Box<str>, format: ImageFormat, monitor: usize) -> DynamicImage{
+
     let screens = Screen::all().unwrap();
-
-    for screen in screens {
-        println!("capturer {screen:?}");
-        let mut image = screen.capture().unwrap();
-        let mut buffer = image.to_png(Compression::Best).unwrap();
-        fs::write(format!("./src/screenshots/{}.png", screen.display_info.id), buffer).unwrap();
-
-        image = screen.capture_area(rect.x0 as i32, rect.y0 as i32, rect.width() as u32, rect.height() as u32).unwrap();
-        buffer = image.to_png(None).unwrap();
-        fs::write(format!("./src/screenshots/{}-2.png", screen.display_info.id), buffer).unwrap();
-    }
-    */
-
+    let screen = screens.get(monitor).expect("Can't find the selected monitor!");
+    /*
     let screen = Screen::from_point(rect.x0 as i32, rect.y0 as i32).unwrap();
     println!("capturer {:?}",screen);
-
+    */
     let image = screen.capture_area(rect.x0 as i32, rect.y0 as i32, rect.width() as u32, rect.height() as u32).unwrap();
 
     let dyn_img = DynamicImage::from(
