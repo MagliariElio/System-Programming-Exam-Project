@@ -31,8 +31,6 @@ pub struct SelectedRect {
 impl SelectedRect {
     /// Construct SelectedRegion with coordinates set.
     pub fn new(monitor: usize) -> Self {
-        //TODO : select the screen in a multi-monitor context!
-
         let primary_monitor_rect = Screen::get_monitors()
             .get(monitor).expect("Can't find the selected monitor!")
             .virtual_rect();
