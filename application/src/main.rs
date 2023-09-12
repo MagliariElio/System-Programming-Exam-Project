@@ -5,7 +5,7 @@ use crate::custom_widget::{ColoredButton, CREATE_ZSTACK, CustomZStack, OverImage
 use druid::piet::ImageFormat;
 use druid::widget::{Align, Button, Click, Container, ControllerHost, Flex, IdentityWrapper, Label, LensWrap, MainAxisAlignment, ZStack};
 use druid::Target::{Auto, Window};
-use druid::{commands as sys_cmd, AppLauncher, Color, Data, Env, EventCtx, FontDescriptor, FontFamily, ImageBuf, Lens, LocalizedString, Menu, Rect, Target, UnitPoint, Vec2, Widget, WidgetExt, WidgetId, WindowDesc, WindowId, WindowState, Point};
+use druid::{commands as sys_cmd, AppLauncher, Color, Data, Env, EventCtx, FontDescriptor, FontFamily, ImageBuf, Lens, LocalizedString, Menu, Rect, Target, UnitPoint, Vec2, Widget, WidgetExt, WidgetId, WindowDesc, WindowId, WindowState, Point,MenuItem,Selector};
 use image::io::Reader;
 use std::sync::Arc;
 
