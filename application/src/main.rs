@@ -6,7 +6,7 @@ use crate::custom_widget::{ColoredButton, CREATE_ZSTACK, CustomSlider, CustomZSt
 use druid::piet::ImageFormat;
 use druid::widget::{Align, Button, Click, Container, ControllerHost, Flex, IdentityWrapper, Label, LensWrap, Scroll, Stepper, TextBox, ViewSwitcher, ZStack};
 use druid::Target::{Auto, Window};
-use druid::{commands as sys_cmd, AppLauncher, Color, Data, Env, EventCtx, FontDescriptor, FontFamily, ImageBuf, Lens, LocalizedString, Menu, Rect, Target, UnitPoint, Vec2, Widget, WidgetExt, WidgetId, WindowDesc, WindowId, WindowState, Point, TextAlignment, Screen,MenuItem,Selector};
+use druid::{commands as sys_cmd,FileSpec, AppLauncher, Color, Data, Env, EventCtx, FontDescriptor, FontFamily, ImageBuf, Lens, LocalizedString, Menu, Rect, Target, UnitPoint, Vec2, Widget, WidgetExt, WidgetId, WindowDesc, WindowId, WindowState, Point, TextAlignment, Screen,MenuItem,Selector, FileDialogOptions, DelegateCtx, Handled, AppDelegate, Command};
 use image::io::Reader;
 use std::sync::Arc;
 
@@ -42,6 +42,8 @@ struct AppState {
     color: Option<Color>,
     #[data(ignore)]
     colors_window_opened: Option<WindowId>,
+    #[data(ignore)]
+    base_path: String,
 }
 
 fn main() {
@@ -68,12 +70,36 @@ fn main() {
         screenshot_id: None,
         color: None,
         colors_window_opened: None,
+        base_path: "./src/screenshots/".to_string(),
     };
+    let delegate = Delegate;
 
     // start the application
     AppLauncher::with_window(main_window)
+        .delegate(delegate)
         .launch(initial_state)
         .expect("Failed to launch application");
+}
+struct Delegate;
+
+impl AppDelegate<AppState> for Delegate {
+    fn command(
+        &mut self,
+        _ctx: &mut DelegateCtx,
+        _target: Target,
+        cmd: &Command,
+        data: &mut AppState,
+        _env: &Env,
+    ) -> Handled {
+        // this gets the open file command when a directory has been selectioned
+        if let Some(file_info) = cmd.get(sys_cmd::SAVE_FILE_AS) {
+            data.base_path = file_info.path.to_string_lossy().to_string();
+            data.base_path = data.base_path.replace("\\", "/");
+            data.base_path.push('/');
+            return Handled::Yes;
+        }
+        Handled::No
+    }
 }
 
 
@@ -415,10 +441,17 @@ pub fn set_shortcutkeys<T: Data>()-> MenuItem<T>{
     MenuItem::new(LocalizedString::new("Shortcut Keys"))
         .command(Shortcut_Keys)
 }
-
-pub fn set_savelocation<T: Data>()-> MenuItem<T>{
-    MenuItem::new(LocalizedString::new("Save Location"))
+pub fn save_as<T: Data>() -> MenuItem<T> {
+    let png = FileSpec::new("PNG file", &["png"]);
+    let jpg = FileSpec::new("JPG file", &["jpg"]);
+    let gif = FileSpec::new("GIF file", &["gif"]);
+    MenuItem::new(LocalizedString::new("Save As"))
+        .command(sys_cmd::SHOW_SAVE_PANEL.with(FileDialogOptions::new()
+                                                            .allowed_types(vec![jpg, png, gif])
+                                                            .default_type(png)
+                                                        ))
 }
+
 
 fn make_menu(_window: Option<WindowId>, _data: &AppState, _env: &Env) -> Menu<AppState> {
     let mut base = Menu::empty();
@@ -444,11 +477,10 @@ fn make_menu(_window: Option<WindowId>, _data: &AppState, _env: &Env) -> Menu<Ap
             .entry(druid::platform_menus::common::cut())
             .entry(druid::platform_menus::common::copy())
             .entry(druid::platform_menus::common::paste()),
-    )
-    .entry(
+    ).entry(
         Menu::new(LocalizedString::new("Settings"))
             .entry(show_about())
-            .entry(set_savelocation())
+            .entry(save_as())
             .entry(set_shortcutkeys())
     )
 }
