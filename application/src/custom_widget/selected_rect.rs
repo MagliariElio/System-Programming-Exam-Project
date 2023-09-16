@@ -25,22 +25,15 @@ enum IfMousePressedWhere {
 pub struct SelectedRect {
     rect: Rect,
     mouse: IfMousePressedWhere,
-    show_overlay: bool
+    show_overlay: bool,
 }
 
 impl SelectedRect {
     /// Construct SelectedRegion with coordinates set.
-    pub fn new() -> Self {
-        //TODO : select the screen in a multi-monitor context!
-
+    pub fn new(monitor: usize) -> Self {
         let primary_monitor_rect = Screen::get_monitors()
-            //.into_iter().filter(|m|m.is_primary()).collect::<Vec<Monitor>>()          // there is an error when take screenshoot is clicked
-            .first().expect("No primary monitor found!")
+            .get(monitor).expect("Can't find the selected monitor!")
             .virtual_rect();
-
-        println!("{:?}", Screen::get_monitors()
-            //.into_iter().filter(|m|m.is_primary()).collect::<Vec<Monitor>>()          // there is an error when take screenshoot is clicked
-            .first().expect("No primary monitor found!"));
 
         Self {
             rect: Rect{
@@ -50,7 +43,7 @@ impl SelectedRect {
                 y1 : primary_monitor_rect.y1,
             },
             mouse: IfMousePressedWhere::NotInterested,
-            show_overlay: false
+            show_overlay: false,
         }
     }
 

@@ -1,4 +1,6 @@
 use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
 use druid::debug_state::DebugState;
 use druid::widget::prelude::*;
 use druid::widget::{Click, ControllerHost, Label, LabelText};
@@ -9,7 +11,7 @@ use tracing::{instrument, trace};
 use crate::custom_widget::screenshot_image::UPDATE_SCREENSHOT;
 use crate::custom_widget::UPDATE_BACK_IMG;
 
-pub const SAVE_SCREENSHOT: Selector<(Rect,WindowId,WidgetId,WidgetId,&'static str,Box<str>,ImageFormat,u8)> = Selector::new("Save the screenshot image, last param: where to save");
+pub const DELAY_SCREENSHOT: Selector<(Rect, WindowId, WidgetId, WidgetId, &'static str, Box<str>, ImageFormat, u64,u8)> = Selector::new("Save the screenshot image, last param: where to save");
 
 // the minimum padding added to a button.
 // NOTE: these values are chosen to match the existing look of TextBox; these
@@ -17,15 +19,15 @@ pub const SAVE_SCREENSHOT: Selector<(Rect,WindowId,WidgetId,WidgetId,&'static st
 const LABEL_INSETS: Insets = Insets::uniform_xy(8., 2.);
 
 /// A button with a text label.
-pub struct TakeScreenshotButton<T> {
+pub struct DelayButton<T> {
     label: Label<T>,
     label_size: Size,
     color: Option<Color>,
-    taking_screenshot: Option<(Rect,WindowId,WidgetId,WidgetId,&'static str,Box<str>,ImageFormat,u8)>,
+    taking_screenshot: Option<(Rect,WindowId,WidgetId,WidgetId,&'static str,Box<str>,ImageFormat,Duration,u8)>,
 }
 
 #[allow(dead_code)]
-impl<T: Data> TakeScreenshotButton<T> {
+impl<T: Data> DelayButton<T> {
     /// Create a new button with a text label.
     ///
     /// Use the [`on_click`] method to provide a closure to be called when the
@@ -42,8 +44,8 @@ impl<T: Data> TakeScreenshotButton<T> {
     /// ```
     ///
     /// [`on_click`]: #method.on_click
-    pub fn new(text: impl Into<LabelText<T>>) -> TakeScreenshotButton<T> {
-        TakeScreenshotButton::from_label(Label::new(text))
+    pub fn new(text: impl Into<LabelText<T>>) -> DelayButton<T> {
+        DelayButton::from_label(Label::new(text))
     }
 
     /// Create a new button with the provided [`Label`].
@@ -63,8 +65,8 @@ impl<T: Data> TakeScreenshotButton<T> {
     /// ```
     ///
     /// [`on_click`]: #method.on_click
-    pub fn from_label(label: Label<T>) -> TakeScreenshotButton<T> {
-        TakeScreenshotButton {
+    pub fn from_label(label: Label<T>) -> DelayButton<T> {
+        DelayButton {
             label,
             label_size: Size::ZERO,
             color: None,
@@ -94,7 +96,7 @@ impl<T: Data> TakeScreenshotButton<T> {
     /// [`new`]: #method.new
     pub fn dynamic(text: impl Fn(&T, &Env) -> String + 'static) -> Self {
         let text: LabelText<T> = text.into();
-        TakeScreenshotButton::new(text)
+        DelayButton::new(text)
     }
 
     /// Provide a closure to be called when this button is clicked.
@@ -115,13 +117,18 @@ impl<T: Data> TakeScreenshotButton<T> {
     }
 }
 
-impl<T: Data> Widget<T> for TakeScreenshotButton<T> {
+impl<T: Data> Widget<T> for DelayButton<T> {
     #[instrument(name = "Button", level = "trace", skip(self, ctx, event, _data, _env))]
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, _data: &mut T, _env: &Env) {
 
         if self.taking_screenshot.is_some(){
-            let (rect,main_window_id,custom_zstack_id,screenshot_id,path,file_name,file_format, monitor) = self.taking_screenshot.as_ref().unwrap();
-            let new_img = Arc::new(save_screenshot(&rect,path,file_name.clone(),*file_format, *monitor as usize));
+            let (rect,main_window_id,custom_zstack_id,screenshot_id,path,file_name,file_format, d, monitor) = self.taking_screenshot.as_ref().unwrap();
+            let d = d.clone();
+            let tj = thread::spawn(move||{
+                thread::sleep(d);
+            });
+            tj.join().unwrap();
+            let new_img = Arc::new(save_screenshot(&rect,path,file_name.clone(),*file_format,*monitor as usize));
             let main_id = main_window_id;
             ctx.get_external_handle()
                 .submit_command(sys_cmd::SHOW_WINDOW, (), *main_id)
@@ -138,10 +145,11 @@ impl<T: Data> Widget<T> for TakeScreenshotButton<T> {
 
         match event {
             Event::Command(cmd) => {
-                if cmd.is(SAVE_SCREENSHOT) {
+                if cmd.is(DELAY_SCREENSHOT) {
                     ctx.window().hide();
-                    let (rect,main_window_id,custom_zstack_id,screenshot_id,path,file_name,file_format, monitor) = cmd.get_unchecked(SAVE_SCREENSHOT);
-                    self.taking_screenshot = Some((*rect,*main_window_id,*custom_zstack_id,*screenshot_id,*path,file_name.clone(),*file_format,*monitor));
+                    let (rect,main_window_id,custom_zstack_id,screenshot_id,path,file_name,file_format, delay, monitor) = cmd.get_unchecked(DELAY_SCREENSHOT);
+                    let d = Duration::from_secs(*delay);
+                    self.taking_screenshot = Some((*rect,*main_window_id,*custom_zstack_id,*screenshot_id,*path,file_name.clone(),*file_format,d, *monitor));
                     ctx.request_layout();
                 }
             }
@@ -265,7 +273,6 @@ impl<T: Data> Widget<T> for TakeScreenshotButton<T> {
         }
     }
 }
-
 
 fn save_screenshot(rect: &Rect, base_path: &str, file_name: Box<str>, format: ImageFormat, monitor: usize) -> DynamicImage{
 
