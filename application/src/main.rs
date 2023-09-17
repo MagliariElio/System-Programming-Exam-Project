@@ -116,7 +116,7 @@ fn build_screenshot_widget(monitor: usize) -> impl Widget<AppState> {
     )
     .with_color(Color::rgb8(70, 250, 70).with_alpha(1.))
     .on_click(|ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
-        let (base_path,name) = file_name(data.name.clone());
+        let (base_path,name) = file_name(data.name.clone(), data.base_path.clone());
         ctx.submit_command(SAVE_SCREENSHOT.with((
             data.rect,
             data.main_window_id.expect("How did you open this window?"),
@@ -136,7 +136,7 @@ fn build_screenshot_widget(monitor: usize) -> impl Widget<AppState> {
             .with_text_size(20.)
     ).with_color(Color::YELLOW)
         .on_click(|ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
-            let (base_path, name) = file_name(data.name.clone());
+            let (base_path, name) = file_name(data.name.clone(), data.base_path.clone());
             ctx.submit_command(DELAY_SCREENSHOT.with((
                 data.rect,
                 data.main_window_id.expect("How did you open this window?"),
@@ -403,7 +403,7 @@ fn build_root_widget() -> impl Widget<AppState> {
         .with_child(ColoredButton::from_label(Label::new("Save")).with_color(Color::rgb(0.,120./256.,0.)).on_click(
             move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
 
-                let (base_path,name) = file_name(data.name.clone());
+                let (base_path,name) = file_name(data.name.clone(), data.base_path.clone());
                 ctx.submit_command(SAVE_OVER_IMG.with((
                     base_path,
                     name,
@@ -450,6 +450,7 @@ pub fn save_as<T: Data>() -> MenuItem<T> {
                                                             .allowed_types(vec![jpg, png, gif])
                                                             .default_type(png)
                                                         ))
+        
 }
 
 
@@ -532,19 +533,20 @@ fn create_color_button(color: Option<Color>,zstack_id: WidgetId) -> ControllerHo
         })
 }
 
-fn file_name(data_name: String) -> (&'static str,Box<str>){
-    const BASE_PATH: &'static str = "./src/screenshots/";
+fn file_name(data_name: String, base_path: String) -> (&'static str, Box<str>){
     let charset = "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    let base_path_modified: &'static str = Box::leak(base_path.into_boxed_str());
+
     let name = if data_name.as_str() == "" && data_name.chars().all(char::is_alphanumeric){
         let mut name = generate(16, charset);
-        let mut path = format!("{}{}", BASE_PATH, name);
+        let mut path = format!("{}{}", base_path_modified, name);
         while Path::new(path.as_str()).exists() {
             name = generate(12, charset);
-            path = format!("{}{}", BASE_PATH, name);
+            path = format!("{}{}", base_path_modified, name);
         }
         format!("screenshot-{}", name).into_boxed_str()
     } else {
         data_name.into_boxed_str()
     };
-    (BASE_PATH,name)
+    (base_path_modified, name)
 }
