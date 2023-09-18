@@ -21,7 +21,7 @@ pub enum OverImages{
 pub const UPDATE_BACK_IMG: Selector<Arc<DynamicImage>> = Selector::new("Update the back image");
 pub const UPDATE_COLOR: Selector<(Option<Color>,Option<f64>)> = Selector::new("Update the over-img color");
 pub const SHOW_OVER_IMG: Selector<OverImages> = Selector::new("Tell the ZStack to show the over_img, params: over_img path");
-pub const SAVE_OVER_IMG: Selector<(&str, Box<str>, image::ImageFormat)> = Selector::new("Tell the ZStack to save the modified screenshot, params: (Screenshot original img's path, Folder Path Where To Save, New File Name, Image Format)");
+pub const SAVE_OVER_IMG: Selector<(Box<str>, Box<str>, image::ImageFormat)> = Selector::new("Tell the ZStack to save the modified screenshot, params: (Screenshot original img's path, Folder Path Where To Save, New File Name, Image Format)");
 pub const CREATE_ZSTACK: Selector<Vec<&'static str>> = Selector::new("Initialized the over-images");
 /// A container that stacks its children on top of each other.
 ///
