@@ -6,7 +6,7 @@ use crate::custom_widget::{Alert, ColoredButton, CREATE_ZSTACK, CustomSlider, Cu
 use druid::piet::ImageFormat;
 use druid::widget::{Align, Button, Click, Container, ControllerHost, Flex, IdentityWrapper, Label, LensWrap, Scroll, Stepper, TextBox, ViewSwitcher, ZStack};
 use druid::Target::{Auto, Window};
-use druid::{commands as sys_cmd, AppLauncher, Color, Data, Env, EventCtx, FontDescriptor, FontFamily, ImageBuf, Lens, LocalizedString, Menu, Rect, Target, UnitPoint, Vec2, Widget, WidgetExt, WidgetId, WindowDesc, WindowId, WindowState, Point, TextAlignment, Screen, AppDelegate, DelegateCtx, Command, Handled, commands, FileDialogOptions};
+use druid::{commands as sys_cmd, AppLauncher, Color, Data, Env, EventCtx, FontDescriptor, FontFamily, ImageBuf, Lens, LocalizedString, Menu, Rect, Target, UnitPoint, Vec2, Widget, WidgetExt, WidgetId, WindowDesc, WindowId, WindowState, Point, TextAlignment, Screen, AppDelegate, DelegateCtx, Command, Handled, commands, FileDialogOptions, MenuItem, FileSpec, Selector};
 use image::io::Reader;
 use std::sync::Arc;
 
@@ -73,6 +73,7 @@ fn main() {
         colors_window_opened: None,
         base_path: "./src/screenshots/".to_string(),
         alert: Alert {alert_visible: false, alert_message: "".to_string()}
+        
     };
 
     let delegate = Delegate;
@@ -487,17 +488,17 @@ pub fn set_shortcutkeys<T: Data>()-> MenuItem<T>{
     MenuItem::new(LocalizedString::new("Shortcut Keys"))
         .command(Shortcut_Keys)
 }
-pub fn save_as<T: Data>() -> MenuItem<T> {
-    let png = FileSpec::new("PNG file", &["png"]);
+pub fn set_path<T: Data>() -> MenuItem<T> {
+    /*let png = FileSpec::new("PNG file", &["png"]);
     let jpg = FileSpec::new("JPG file", &["jpg"]);
-    let gif = FileSpec::new("GIF file", &["gif"]);
-    MenuItem::new(LocalizedString::new("Save As"))
-        .command(sys_cmd::SHOW_SAVE_PANEL.with(FileDialogOptions::new()
-                                                            .allowed_types(vec![jpg, png, gif])
-                                                            .default_type(png)
-                                                        ))
-        
+    let gif = FileSpec::new("GIF file", &["gif"]);*/
+    MenuItem::new(LocalizedString::new("Set Path"))
+        .command(commands::SHOW_OPEN_PANEL.with(FileDialogOptions::default().select_directories()))
+                
 }
+        
+        
+
 
 
 fn make_menu(_window: Option<WindowId>, _data: &AppState, _env: &Env) -> Menu<AppState> {
@@ -527,7 +528,7 @@ fn make_menu(_window: Option<WindowId>, _data: &AppState, _env: &Env) -> Menu<Ap
     ).entry(
         Menu::new(LocalizedString::new("Settings"))
             .entry(show_about())
-            .entry(save_as())
+            .entry(set_path())
             .entry(set_shortcutkeys())
     )
 }
