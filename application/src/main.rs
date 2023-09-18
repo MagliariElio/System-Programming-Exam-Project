@@ -2,11 +2,11 @@ mod custom_widget;
 
 use random_string::generate;
 use std::path::Path;
-use crate::custom_widget::{ColoredButton, CREATE_ZSTACK, CustomSlider, CustomZStack, DELAY_SCREENSHOT, DelayButton, OverImages, SAVE_OVER_IMG, SAVE_SCREENSHOT, ScreenshotImage, SelectedRect, SHOW_OVER_IMG, TakeScreenshotButton, UPDATE_BACK_IMG, UPDATE_COLOR};
+use crate::custom_widget::{Alert, ColoredButton, CREATE_ZSTACK, CustomSlider, CustomZStack, DELAY_SCREENSHOT, DelayButton, OverImages, SAVE_OVER_IMG, SAVE_SCREENSHOT, ScreenshotImage, SelectedRect, SHOW_OVER_IMG, TakeScreenshotButton, UPDATE_BACK_IMG, UPDATE_COLOR};
 use druid::piet::ImageFormat;
 use druid::widget::{Align, Button, Click, Container, ControllerHost, Either, Flex, IdentityWrapper, Label, LensWrap, Scroll, Stepper, TextBox, ViewSwitcher, ZStack};
 use druid::Target::{Auto, Window};
-use druid::{commands as sys_cmd, AppLauncher, Color, Data, Env, EventCtx, FontDescriptor, FontFamily, ImageBuf, Lens, LocalizedString, Menu, Rect, Target, UnitPoint, Vec2, Widget, WidgetExt, WidgetId, WindowDesc, WindowId, WindowState, Point, TextAlignment, Screen};
+use druid::{commands as sys_cmd, AppLauncher, Color, Data, Env, EventCtx, FontDescriptor, FontFamily, ImageBuf, Lens, LocalizedString, Menu, Rect, Target, UnitPoint, Vec2, Widget, WidgetExt, WidgetId, WindowDesc, WindowId, WindowState, Point, TextAlignment, Screen, AppDelegate, DelegateCtx, Command, Handled, commands, FileDialogOptions, MenuItem, Selector};
 use image::io::Reader;
 use std::sync::Arc;
 
@@ -53,6 +53,9 @@ struct AppState {
     color: Option<Color>,
     #[data(ignore)]
     colors_window_opened: Option<WindowId>,
+    #[data(ignore)]
+    base_path: String,
+    alert: Alert
 }
 
 fn main() {
@@ -80,18 +83,67 @@ fn main() {
         color: None,
         colors_window_opened: None,
         state: State::Start,
+        base_path: "./src/screenshots/".to_string(),
+        alert: Alert {alert_visible: false, alert_message: "".to_string()}
     };
+
+    let delegate = Delegate;
 
     // start the application
     AppLauncher::with_window(main_window)
+        .delegate(delegate)
         .launch(initial_state)
         .expect("Failed to launch application");
 }
+struct Delegate;
 
+impl AppDelegate<AppState> for Delegate {
+    fn command(
+        &mut self,
+        _ctx: &mut DelegateCtx,
+        _target: Target,
+        cmd: &Command,
+        data: &mut AppState,
+        _env: &Env,
+    ) -> Handled {
+        // this gets the open file command when a directory has been selectioned
+        if let Some(file_info) = cmd.get(commands::OPEN_FILE) {
+            data.base_path = file_info.path.to_string_lossy().to_string().replace("\\", "/");
+            data.base_path.push('/');
+            return Handled::Yes;
+        }
+        Handled::No
+    }
+}
 
+fn alert_widget() -> impl Widget<AppState> {
+    let alert = Flex::row()
+        .with_child(
+            Label::new(|data: &AppState, _env: &_| data.alert.alert_message.clone())
+                .with_text_color(Color::WHITE)
+                .padding(10.0)
+        )
+        .with_default_spacer()
+        .with_child(
+            Button::new("Close")
+                .on_click(|ctx, data: &mut AppState, _| {
+                    data.alert.hide_alert();
+                    ctx.request_update();
+                })
+                .fix_height(30.0)
+                .fix_width(60.0)
+                .background(Color::RED)
+        )
+        .with_default_spacer()
+        .background(Color::rgb8(0, 120, 200))
+        .border(Color::rgb8(0, 100, 160), 2.0)
+        .fix_width(800.0)
+        .fix_height(40.0)
+        .center();
+    alert
+}
 
 fn build_screenshot_widget(monitor: usize) -> impl Widget<AppState> {
-
     let rectangle = LensWrap::new(SelectedRect::new(monitor), AppState::rect);
 
     let take_screenshot_button = TakeScreenshotButton::from_label(
@@ -102,7 +154,8 @@ fn build_screenshot_widget(monitor: usize) -> impl Widget<AppState> {
     )
     .with_color(Color::rgb8(70, 250, 70).with_alpha(1.))
     .on_click(|ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
-        let (base_path,name) = file_name(data.name.clone());
+        let (base_path,name) = file_name(data.name.clone(), data.base_path.clone());
+        data.alert.show_alert("The image has been saved on the disk!"); // TODO: it should be moved after saving the image
         ctx.submit_command(SAVE_SCREENSHOT.with((
             data.rect,
             data.main_window_id.expect("How did you open this window?"),
@@ -123,7 +176,8 @@ fn build_screenshot_widget(monitor: usize) -> impl Widget<AppState> {
             .with_text_size(20.)
     ).with_color(Color::YELLOW)
         .on_click(|ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
-            let (base_path, name) = file_name(data.name.clone());
+            let (base_path, name) = file_name(data.name.clone(), data.base_path.clone());
+            data.alert.show_alert("The image has been saved on the disk!"); // TODO: it should be moved after saving the image
             ctx.submit_command(DELAY_SCREENSHOT.with((
                 data.rect,
                 data.main_window_id.expect("How did you open this window?"),
@@ -424,26 +478,32 @@ fn build_root_widget() -> impl Widget<AppState> {
                 data.state = State::ScreenTaken(ImageModified::NotSavable);
             },
         ), Label::new(""));
-
+    let path_button = Either::new(
+        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::Savable) || data.state == State::Start,
+        Button::from_label(Label::new("path")).on_click(
+            move |ctx: &mut EventCtx, _data: &mut AppState, _env: &Env| {
+                ctx.submit_command(commands::SHOW_OPEN_PANEL.with(FileDialogOptions::default().select_directories()))
+            },
+        ), Label::new(""));
     let save_button = Either::new(
         |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::Savable),
         ColoredButton::from_label(Label::new("Save")).with_color(Color::rgb(0.,120./256.,0.)).on_click(
             move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
-
-                let (base_path,name) = file_name(data.name.clone());
+                let (base_path,name) = file_name(data.name.clone(), data.base_path.clone());
+                data.alert.show_alert("The image has been saved on the disk!"); // TODO: it should be moved after saving the image
                 ctx.submit_command(SAVE_OVER_IMG.with((
                     base_path,
                     name,
                     image::ImageFormat::from_extension(data.extension.trim_start_matches(".")).unwrap(),
                 )));
                 data.state = State::ScreenTaken(ImageModified::NotSavable);
-            },
+            }
         ),Label::new(""));
 
     let file_name_label = Label::new(
         |data: &AppState,_env: &_|{
             match data.state{
-                State::Start =>"Screenshot Name:",
+                State::Start =>"Screenshot:",
                 State::ScreenTaken(ImageModified::Savable) =>"Modified Image:",
                 State::ScreenTaken(ImageModified::NotSavable) =>"",
             }
@@ -465,7 +525,20 @@ fn build_root_widget() -> impl Widget<AppState> {
         .with_spacer(40.)
         .with_child(file_name_label)
         .with_default_spacer()
+        .with_child(path_button)
+        .with_default_spacer()
+        .with_child(Label::new(|data: &AppState, _env: &_| {
+            if data.state == State::ScreenTaken(ImageModified::Savable) || data.state == State::Start {"/"}
+            else { "" }
+        }
+        ).with_text_color(Color::BLACK))
+        .with_default_spacer()
         .with_child(name_selector)
+        .with_default_spacer()
+        .with_child(Label::new(|data: &AppState, _env: &_| {
+            if data.state == State::ScreenTaken(ImageModified::Savable) || data.state == State::Start {"."}
+            else { "" }
+        }).with_text_color(Color::BLACK))
         .with_default_spacer()
         .with_child(extension_selector)
         .with_default_spacer()
@@ -477,10 +550,20 @@ fn build_root_widget() -> impl Widget<AppState> {
         .with_default_spacer()
         .with_child(screen_selector);
 
+    let alert_row = Flex::row()
+        .with_child(
+            druid::widget::Either::new(
+                |data: &AppState, _| data.alert.alert_visible,
+                alert_widget(),
+                Label::new(""),
+            )).center();
+
 
     let scroll = Scroll::new(Flex::column()
         .with_default_spacer()
         .with_child(Flex::row().with_child(buttons_bar))
+        .with_default_spacer()
+        .with_child(Flex::row().with_child(alert_row))
         .with_default_spacer()
         //flex.set_must_fill_main_axis(true);
         .with_child(spaced_zstack)).vertical();
@@ -488,6 +571,30 @@ fn build_root_widget() -> impl Widget<AppState> {
     let layout = scroll.background(Color::WHITE).expand().padding(5.);
     layout
 }
+
+pub const SHORTCUT_KEYS: Selector = Selector::new("ShortcutKeys-Command");
+
+pub fn show_about<T: Data>()-> MenuItem<T>{
+    MenuItem::new(LocalizedString::new("About Us"))
+        .command(sys_cmd::SHOW_ABOUT)
+}
+
+pub fn set_shortcutkeys<T: Data>()-> MenuItem<T>{
+    MenuItem::new(LocalizedString::new("Shortcut Keys"))
+        .command(SHORTCUT_KEYS)
+}
+pub fn set_path<T: Data>() -> MenuItem<T> {
+    /*let png = FileSpec::new("PNG file", &["png"]);
+    let jpg = FileSpec::new("JPG file", &["jpg"]);
+    let gif = FileSpec::new("GIF file", &["gif"]);*/
+    MenuItem::new(LocalizedString::new("Set Path"))
+        .command(commands::SHOW_OPEN_PANEL.with(FileDialogOptions::default().select_directories()))
+                
+}
+        
+        
+
+
 
 fn make_menu(_window: Option<WindowId>, _data: &AppState, _env: &Env) -> Menu<AppState> {
     let mut base = Menu::empty();
@@ -506,13 +613,18 @@ fn make_menu(_window: Option<WindowId>, _data: &AppState, _env: &Env) -> Menu<Ap
     }
     //TODO: implement the menù
     base.entry(
-        Menu::new(LocalizedString::new("common-menu-edit-menu"))
+        Menu::new(LocalizedString::new("Edit"))
             .entry(druid::platform_menus::common::undo())
             .entry(druid::platform_menus::common::redo())
             .separator()
             .entry(druid::platform_menus::common::cut())
             .entry(druid::platform_menus::common::copy())
             .entry(druid::platform_menus::common::paste()),
+    ).entry(
+        Menu::new(LocalizedString::new("Settings"))
+            .entry(show_about())
+            .entry(set_path())
+            .entry(set_shortcutkeys())
     )
 }
 
@@ -562,20 +674,24 @@ fn create_color_button(color: Option<Color>,zstack_id: WidgetId) -> ControllerHo
             ctx.window().close();
         })
 }
-
-fn file_name(data_name: String) -> (&'static str,Box<str>){
-    const BASE_PATH: &'static str = "./src/screenshots/";
+/**
+* This function assigns a name and a file path to an image stored on the disk.
+*/
+fn file_name(data_name: String, base_path: String) -> (Box<str>, Box<str>){
+    //TODO: use a date.
     let charset = "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    let base_path_modified = base_path.into_boxed_str();
+
     let name = if data_name.as_str() == "" && data_name.chars().all(char::is_alphanumeric){
         let mut name = generate(16, charset);
-        let mut path = format!("{}{}", BASE_PATH, name);
+        let mut path = format!("{}{}", base_path_modified, name);
         while Path::new(path.as_str()).exists() {
             name = generate(12, charset);
-            path = format!("{}{}", BASE_PATH, name);
+            path = format!("{}{}", base_path_modified, name);
         }
         format!("screenshot-{}", name).into_boxed_str()
     } else {
         data_name.into_boxed_str()
     };
-    (BASE_PATH,name)
+    (base_path_modified, name)
 }
