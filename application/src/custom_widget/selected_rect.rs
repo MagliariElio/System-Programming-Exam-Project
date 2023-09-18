@@ -37,10 +37,10 @@ impl SelectedRect {
 
         Self {
             rect: Rect{
-                x0 : primary_monitor_rect.x0,
-                y0 : primary_monitor_rect.y0,
-                x1 : primary_monitor_rect.x1,
-                y1 : primary_monitor_rect.y1,
+                x0 : primary_monitor_rect.x0+5.,
+                y0 : primary_monitor_rect.y0+5.,
+                x1 : primary_monitor_rect.x1-5.,
+                y1 : primary_monitor_rect.y1-5.,
             },
             mouse: IfMousePressedWhere::NotInterested,
             show_overlay: false,
