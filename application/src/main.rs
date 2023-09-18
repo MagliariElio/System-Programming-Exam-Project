@@ -4,7 +4,7 @@ use random_string::generate;
 use std::path::Path;
 use crate::custom_widget::{ColoredButton, CREATE_ZSTACK, CustomSlider, CustomZStack, DELAY_SCREENSHOT, DelayButton, OverImages, SAVE_OVER_IMG, SAVE_SCREENSHOT, ScreenshotImage, SelectedRect, SHOW_OVER_IMG, TakeScreenshotButton, UPDATE_BACK_IMG, UPDATE_COLOR};
 use druid::piet::ImageFormat;
-use druid::widget::{Align, Button, Click, Container, ControllerHost, Flex, IdentityWrapper, Label, LensWrap, Scroll, Stepper, TextBox, ViewSwitcher, ZStack};
+use druid::widget::{Align, Button, Click, Container, ControllerHost, Either, Flex, IdentityWrapper, Label, LensWrap, Scroll, Stepper, TextBox, ViewSwitcher, ZStack};
 use druid::Target::{Auto, Window};
 use druid::{commands as sys_cmd, AppLauncher, Color, Data, Env, EventCtx, FontDescriptor, FontFamily, ImageBuf, Lens, LocalizedString, Menu, Rect, Target, UnitPoint, Vec2, Widget, WidgetExt, WidgetId, WindowDesc, WindowId, WindowState, Point, TextAlignment, Screen};
 use image::io::Reader;
@@ -23,7 +23,16 @@ const X0: f64 = 0.;
 const Y0: f64 = 0.;
 const X1: f64 = 1920.; // 1000.
 const Y1: f64 = 1080.; // 500.
-
+#[derive(Clone,PartialEq)]
+enum ImageModified{
+    NotSavable,
+    Savable,
+}
+#[derive(Clone,PartialEq)]
+enum State{
+    Start,
+    ScreenTaken(ImageModified),
+}
 #[derive(Clone, Data, Lens)]
 struct AppState {
     rect: Rect,
@@ -32,6 +41,8 @@ struct AppState {
     name: String,
     delay: f64,
     screen: String,
+    #[data(eq)]
+    state: State,
     #[data(ignore)]
     main_window_id: Option<WindowId>,
     #[data(ignore)]
@@ -68,6 +79,7 @@ fn main() {
         screenshot_id: None,
         color: None,
         colors_window_opened: None,
+        state: State::Start,
     };
 
     // start the application
@@ -101,6 +113,7 @@ fn build_screenshot_widget(monitor: usize) -> impl Widget<AppState> {
             image::ImageFormat::from_extension(data.extension.trim_start_matches(".")).unwrap(),
             std::str::FromStr::from_str(data.screen.trim_start_matches(".")).unwrap(),
         )).to(Target::Widget(ctx.widget_id())));
+        data.state = State::ScreenTaken(ImageModified::NotSavable);
     });
 
     let delay_button = DelayButton::from_label(
@@ -122,6 +135,7 @@ fn build_screenshot_widget(monitor: usize) -> impl Widget<AppState> {
                 data.delay as u64,
                 std::str::FromStr::from_str(data.screen.trim_start_matches(".")).unwrap(),
             )).to(Target::Widget(ctx.widget_id())));
+            data.state = State::ScreenTaken(ImageModified::NotSavable);
         });
 
     let delay_value = Label::dynamic(|data: &AppState,_env|{
@@ -176,7 +190,13 @@ fn build_screenshot_widget(monitor: usize) -> impl Widget<AppState> {
 fn build_root_widget() -> impl Widget<AppState> {
     let screenshot_widget_id = WidgetId::next();
     let zstack_id = WidgetId::next();
-    let take_screenshot_button = ColoredButton::from_label(Label::new("Take Screenshoot"))
+    let take_screenshot_button = ColoredButton::from_label(
+        Label::new(|data: &AppState, _env: &_|{
+            match data.state{
+                State::Start => "Take Screenshot",
+                State::ScreenTaken(_) => "New Screenshot",
+            }
+        }))
         .with_color(Color::rgb(160./256.,0.,0.)).on_click(
         move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
             data.main_window_id = Some(ctx.window_id());
@@ -195,7 +215,13 @@ fn build_root_widget() -> impl Widget<AppState> {
                     .show_titlebar(false)
                     .set_window_state(WindowState::Maximized)
                     .set_position(monitor.virtual_rect().origin())
-            )
+            );
+            ctx.submit_command(
+                SHOW_OVER_IMG
+                    .with(OverImages::Remove)
+                    .to(Target::Widget(zstack_id)),
+            );
+            data.state = State::ScreenTaken(ImageModified::NotSavable);
         },
     );
 
@@ -235,43 +261,50 @@ fn build_root_widget() -> impl Widget<AppState> {
     let spaced_zstack = Container::new(zstack).padding((10.0, 0.0));
 
 
-    let name_selector = TextBox::new()
-        .with_placeholder("file name").with_text_alignment(TextAlignment::Center)
-        .lens(AppState::name);
+    let name_selector =  Either::new(
+        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::Savable) || data.state == State::Start,
+        TextBox::new()
+            .with_placeholder("file name").with_text_alignment(TextAlignment::Center)
+            .lens(AppState::name),
+        Label::new("")
+        );
 
-    let extension_selector = ViewSwitcher::new(
-        |data: &AppState, _env| data.clone(),
-        |selector, _data, _env| match selector.extension.as_str() {
-            "png" => Box::new(Label::new("PNG ▼").with_text_color(Color::BLACK)
-                .border(Color::BLACK,2.)
-                .on_click(|_,data: &mut AppState,_| data.extension = String::from(".png"))),
-            "jpg" => Box::new(Label::new("JPG ▼").with_text_color(Color::BLACK)
-                .border(Color::BLACK,2.)
-                .on_click(|_,data: &mut AppState,_| data.extension = String::from(".jpg"))),
-            "gif" => Box::new(Label::new("GIF ▼").with_text_color(Color::BLACK)
-                .border(Color::BLACK,2.)
-                .on_click(|_,data: &mut AppState,_| data.extension = String::from(".gif"))),
-            _ => {
-                let text_alpha = match selector.extension.as_str(){
-                    ".png" => (1f64,0.4f64,0.4f64),
-                    ".jpg" => (0.4f64,1f64,0.4f64),
-                    ".gif" => (0.4f64,0.4f64,1f64),
-                    _ => panic!(),
-                };
-                Box::new(Scroll::new(
-                    Flex::column()
-                        .with_child(Label::new("PNG").with_text_color(Color::BLACK.with_alpha(text_alpha.0))
-                            .border(Color::BLACK.with_alpha(text_alpha.0), 2.).fix_size(40., 27.)
-                            .on_click(|_, data: &mut AppState, _| data.extension = String::from("png")))
-                        .with_child(Label::new("JPG").with_text_color(Color::BLACK.with_alpha(text_alpha.1))
-                            .border(Color::BLACK.with_alpha(text_alpha.1), 2.).fix_size(40., 27.)
-                            .on_click(|_, data: &mut AppState, _| data.extension = String::from("jpg")))
-                        .with_child(Label::new("GIF").with_text_color(Color::BLACK.with_alpha(text_alpha.2))
-                            .border(Color::BLACK.with_alpha(text_alpha.2), 2.).fix_size(40., 27.)
-                            .on_click(|_, data: &mut AppState, _| data.extension = String::from("gif"))))
-                    .border(Color::BLACK.with_alpha(0.6), 4.))
-            }
-        },);
+    let extension_selector = Either::new(
+        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::Savable) || data.state == State::Start,
+        ViewSwitcher::new(
+            |data: &AppState, _env| data.clone(),
+            |selector, _data, _env| match selector.extension.as_str() {
+                "png" => Box::new(Label::new("PNG ▼").with_text_color(Color::BLACK)
+                    .border(Color::BLACK,2.)
+                    .on_click(|_,data: &mut AppState,_| data.extension = String::from(".png"))),
+                "jpg" => Box::new(Label::new("JPG ▼").with_text_color(Color::BLACK)
+                    .border(Color::BLACK,2.)
+                    .on_click(|_,data: &mut AppState,_| data.extension = String::from(".jpg"))),
+                "gif" => Box::new(Label::new("GIF ▼").with_text_color(Color::BLACK)
+                    .border(Color::BLACK,2.)
+                    .on_click(|_,data: &mut AppState,_| data.extension = String::from(".gif"))),
+                _ => {
+                    let text_alpha = match selector.extension.as_str(){
+                        ".png" => (1f64,0.4f64,0.4f64),
+                        ".jpg" => (0.4f64,1f64,0.4f64),
+                        ".gif" => (0.4f64,0.4f64,1f64),
+                        _ => panic!(),
+                    };
+                    Box::new(Scroll::new(
+                        Flex::column()
+                            .with_child(Label::new("PNG").with_text_color(Color::BLACK.with_alpha(text_alpha.0))
+                                .border(Color::BLACK.with_alpha(text_alpha.0), 2.).fix_size(40., 27.)
+                                .on_click(|_, data: &mut AppState, _| data.extension = String::from("png")))
+                            .with_child(Label::new("JPG").with_text_color(Color::BLACK.with_alpha(text_alpha.1))
+                                .border(Color::BLACK.with_alpha(text_alpha.1), 2.).fix_size(40., 27.)
+                                .on_click(|_, data: &mut AppState, _| data.extension = String::from("jpg")))
+                            .with_child(Label::new("GIF").with_text_color(Color::BLACK.with_alpha(text_alpha.2))
+                                .border(Color::BLACK.with_alpha(text_alpha.2), 2.).fix_size(40., 27.)
+                                .on_click(|_, data: &mut AppState, _| data.extension = String::from("gif"))))
+                        .border(Color::BLACK.with_alpha(0.6), 4.))
+                }
+            },),Label::new("")
+    );
 
     let screen_selector = ViewSwitcher::new(
         |data: &AppState, _env| data.clone(),
@@ -300,81 +333,101 @@ fn build_root_widget() -> impl Widget<AppState> {
 
         });
 
-    let buttons_bar = Flex::row()
-        .with_default_spacer()
-        .with_child(Button::from_label(Label::new("⭕")).on_click(
-            move |ctx: &mut EventCtx, _data: &mut AppState, _env: &Env| {
+    let circle_button = Either::new(
+        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::NotSavable),
+        Button::from_label(Label::new("⭕")).on_click(
+            move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
                 ctx.submit_command(
                     SHOW_OVER_IMG
                         .with(OverImages::Circles)
                         .to(Target::Widget(zstack_id)),
                 );
+                data.state = State::ScreenTaken(ImageModified::Savable);
             },
-        ))
-        .with_default_spacer()
-        .with_child(Button::from_label(Label::new("△")).on_click(
-            move |ctx: &mut EventCtx, _data: &mut AppState, _env: &Env| {
+        ), Label::new(""));
+
+    let triangle_button =  Either::new(
+        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::NotSavable),
+        Button::from_label(Label::new("△")).on_click(
+            move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
                 ctx.submit_command(
                     SHOW_OVER_IMG
                         .with(OverImages::Triangle)
                         .to(Target::Widget(zstack_id)),
                 );
+                data.state = State::ScreenTaken(ImageModified::Savable);
             },
-        ))
-        .with_default_spacer()
-        .with_child(Button::from_label(Label::new("→")).on_click(
-            move |ctx: &mut EventCtx, _data: &mut AppState, _env: &Env| {
+        ),Label::new(""));
+    let arrow_button = Either::new(
+        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::NotSavable),
+        Button::from_label(Label::new("→")).on_click(
+            move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
                 ctx.submit_command(
                     SHOW_OVER_IMG
                         .with(OverImages::Arrow)
                         .to(Target::Widget(zstack_id)),
                 );
+                data.state = State::ScreenTaken(ImageModified::Savable);
             }
-        ))
-        .with_default_spacer()
-        .with_child(Button::from_label(Label::new("⎚")).on_click(
-            move |ctx: &mut EventCtx, _data: &mut AppState, _env: &Env| {
+        ),Label::new(""));
+    let highlighter_button = Either::new(
+        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::NotSavable),
+        Button::from_label(Label::new("⎚")).on_click(
+            move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
                 ctx.submit_command(
                     SHOW_OVER_IMG
                         .with(OverImages::Highlighter)
                         .to(Target::Widget(zstack_id)),
                 );
+                data.state = State::ScreenTaken(ImageModified::Savable);
             }
-        ))
-        .with_default_spacer()
-        .with_child(ColoredButton::from_label(Label::new("Color")).with_color(Color::PURPLE)
+        ),Label::new(""));
+    let colors_button =  Either::new(
+        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::NotSavable),
+        ColoredButton::from_label(Label::new("Color")).with_color(Color::PURPLE)
             .on_click(
-            move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
-                if data.colors_window_opened.is_none() {
-                    let mut init_pos = ctx.to_screen(Point::new(1.,ctx.size().height-1.));
-                    init_pos.y += 5.;
-                    let wd = WindowDesc::new(build_colors_window(zstack_id))
-                        .title(WINDOW_TITLE)
-                        .set_always_on_top(true)
-                        .show_titlebar(false)
-                        .set_window_state(WindowState::Restored)
-                        .window_size((1., 250.))
-                        .set_position(init_pos)
-                        .resizable(false)
-                        .transparent(false);
-                    data.colors_window_opened = Some(wd.id);
-                    ctx.new_window(wd);
-                } else {
-                    ctx.get_external_handle().submit_command(
-                        sys_cmd::CLOSE_WINDOW,
-                        (),
-                        Window(data.colors_window_opened.unwrap())
-                    ).unwrap();
-                    data.colors_window_opened = None;
+                move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
+                    if data.colors_window_opened.is_none() {
+                        let mut init_pos = ctx.to_screen(Point::new(1.,ctx.size().height-1.));
+                        init_pos.y += 5.;
+                        let wd = WindowDesc::new(build_colors_window(zstack_id))
+                            .title(WINDOW_TITLE)
+                            .set_always_on_top(true)
+                            .show_titlebar(false)
+                            .set_window_state(WindowState::Restored)
+                            .window_size((1., 250.))
+                            .set_position(init_pos)
+                            .resizable(false)
+                            .transparent(false);
+                        data.colors_window_opened = Some(wd.id);
+                        ctx.new_window(wd);
+                    } else {
+                        ctx.get_external_handle().submit_command(
+                            sys_cmd::CLOSE_WINDOW,
+                            (),
+                            Window(data.colors_window_opened.unwrap())
+                        ).unwrap();
+                        data.colors_window_opened = None;
+                    }
                 }
-            }
-        ))
-        .with_spacer(40.)
-        .with_child(name_selector)
-        .with_default_spacer()
-        .with_child(extension_selector)
-        .with_default_spacer()
-        .with_child(ColoredButton::from_label(Label::new("Save")).with_color(Color::rgb(0.,120./256.,0.)).on_click(
+            ),Label::new(""));
+
+    let remove_over_img = Either::new(
+        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::Savable),
+        Button::from_label(Label::new("❌")).on_click(
+            move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
+                ctx.submit_command(
+                    SHOW_OVER_IMG
+                        .with(OverImages::Remove)
+                        .to(Target::Widget(zstack_id)),
+                );
+                data.state = State::ScreenTaken(ImageModified::NotSavable);
+            },
+        ), Label::new(""));
+
+    let save_button = Either::new(
+        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::Savable),
+        ColoredButton::from_label(Label::new("Save")).with_color(Color::rgb(0.,120./256.,0.)).on_click(
             move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
 
                 let (base_path,name) = file_name(data.name.clone());
@@ -383,8 +436,40 @@ fn build_root_widget() -> impl Widget<AppState> {
                     name,
                     image::ImageFormat::from_extension(data.extension.trim_start_matches(".")).unwrap(),
                 )));
+                data.state = State::ScreenTaken(ImageModified::NotSavable);
             },
-        ))
+        ),Label::new(""));
+
+    let file_name_label = Label::new(
+        |data: &AppState,_env: &_|{
+            match data.state{
+                State::Start =>"Screenshot Name:",
+                State::ScreenTaken(ImageModified::Savable) =>"Modified Image:",
+                State::ScreenTaken(ImageModified::NotSavable) =>"",
+            }
+        }).with_text_color(Color::BLACK.with_alpha(0.85));
+
+    let buttons_bar = Flex::row()
+        .with_default_spacer()
+        .with_child(remove_over_img)
+        .with_default_spacer()
+        .with_child(circle_button)
+        .with_default_spacer()
+        .with_child(triangle_button)
+        .with_default_spacer()
+        .with_child(arrow_button)
+        .with_default_spacer()
+        .with_child(highlighter_button)
+        .with_default_spacer()
+        .with_child(colors_button)
+        .with_spacer(40.)
+        .with_child(file_name_label)
+        .with_default_spacer()
+        .with_child(name_selector)
+        .with_default_spacer()
+        .with_child(extension_selector)
+        .with_default_spacer()
+        .with_child(save_button)
         .with_spacer(40.)
         .with_flex_child(Container::new(take_screenshot_button), 1.0)
         .with_default_spacer()

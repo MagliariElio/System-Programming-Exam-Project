@@ -15,7 +15,8 @@ pub enum OverImages{
     Circles,
     Triangle,
     Arrow,
-    Highlighter
+    Highlighter,
+    Remove,
 }
 pub const UPDATE_BACK_IMG: Selector<Arc<DynamicImage>> = Selector::new("Update the back image");
 pub const UPDATE_COLOR: Selector<(Option<Color>,Option<f64>)> = Selector::new("Update the over-img color");
@@ -199,6 +200,7 @@ impl<T: Data> Widget<T> for CustomZStack<T> {
                         OverImages::Triangle => {self.show_over_img(1, ctx.widget_id());}
                         OverImages::Arrow => {self.show_over_img(2, ctx.widget_id());}
                         OverImages::Highlighter => {self.show_over_img(3, ctx.widget_id());}
+                        OverImages::Remove => {if self.showing_over_img.is_some(){self.show_over_img(0, ctx.widget_id());}}
                     }
 
                 } else if cmd.is(SAVE_OVER_IMG){
