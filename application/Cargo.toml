@@ -12,6 +12,8 @@ image = "0.24.6"
 random-string = "1.0.0"
 screenshots = "0.8.0"
 tracing = "0.1.37"
+lazy_static = "1.4.0"
+clippers = "0.1.2"
 [dependencies.druid]
 version = "0.8.3"
 features = ["im","svg","image-all","image","serde"]

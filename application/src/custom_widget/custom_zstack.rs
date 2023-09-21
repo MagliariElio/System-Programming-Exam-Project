@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use druid::{BoxConstraints, Data, Env, Event, EventCtx, InternalEvent, LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx, Point, Rect, Size, UnitPoint, UpdateCtx, Vec2, Widget, WidgetExt, WidgetPod, ImageBuf, WidgetId, Target, Color, Selector};
+use druid::{BoxConstraints, Data, Env, Event, EventCtx, InternalEvent, LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx, Point, Rect, Size, UnitPoint, UpdateCtx, Vec2, Widget, WidgetExt, WidgetPod, ImageBuf, WidgetId, Target, Color, Selector, commands};
 use druid::kurbo::common::FloatExt;
 use druid::piet::ImageFormat;
 use image::{ImageFormat as imgFormat};
@@ -193,6 +193,13 @@ impl<T: Data> Widget<T> for CustomZStack<T> {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut T, env: &Env) {
         match event {
             Event::Command(cmd) => {
+                if cmd.is(commands::COPY) {
+                    if let Some(image) = self.back_img.clone() {
+                        let image_buffer = image.into_rgba8();
+                        let mut clipboard = clippers::Clipboard::get();
+                        clipboard.write_image(image_buffer.width(), image_buffer.height(), image_buffer.as_raw()).unwrap();
+                    }
+                }
                 if cmd.is(SHOW_OVER_IMG) {
                     let path = cmd.get_unchecked(SHOW_OVER_IMG);
                     match path{

@@ -1,4 +1,6 @@
-use std::sync::Arc;
+use std::sync::{Arc};
+use std::thread;
+use std::time::Duration;
 use druid::debug_state::DebugState;
 use druid::widget::prelude::*;
 use druid::widget::{Click, ControllerHost, Label, LabelText};
@@ -7,9 +9,9 @@ use image::{DynamicImage, ImageFormat};
 use screenshots::{Screen};
 use tracing::{instrument, trace};
 use crate::custom_widget::screenshot_image::UPDATE_SCREENSHOT;
-use crate::custom_widget::UPDATE_BACK_IMG;
+use crate::custom_widget::{UPDATE_BACK_IMG};
 
-pub const SAVE_SCREENSHOT: Selector<(Rect,WindowId,WidgetId,WidgetId,Box<str>,Box<str>,ImageFormat,u8)> = Selector::new("Save the screenshot image, last param: where to save");
+pub const SAVE_SCREENSHOT: Selector<(Rect,WindowId,WidgetId,WidgetId,Box<str>,Box<str>,ImageFormat,u64,u8)> = Selector::new("Save the screenshot image, last param: where to save");
 
 // the minimum padding added to a button.
 // NOTE: these values are chosen to match the existing look of TextBox; these
@@ -21,7 +23,7 @@ pub struct TakeScreenshotButton<T> {
     label: Label<T>,
     label_size: Size,
     color: Option<Color>,
-    taking_screenshot: Option<(Rect,WindowId,WidgetId,WidgetId,Box<str>,Box<str>,ImageFormat,u8)>,
+    taking_screenshot: Option<(Rect,WindowId,WidgetId,WidgetId,Box<str>,Box<str>,ImageFormat,Duration,u8)>,
 }
 
 #[allow(dead_code)]
@@ -120,9 +122,20 @@ impl<T: Data> Widget<T> for TakeScreenshotButton<T> {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, _data: &mut T, _env: &Env) {
 
         if self.taking_screenshot.is_some(){
-            let (rect,main_window_id,custom_zstack_id,screenshot_id,path,file_name,file_format, monitor) = self.taking_screenshot.as_ref().unwrap();
+            let (rect,main_window_id,custom_zstack_id,screenshot_id,path,file_name,file_format, timeout, monitor) = self.taking_screenshot.as_ref().unwrap();
+
+            // it implements the delay request
+            if !timeout.is_zero() {
+                let timeout = timeout.clone();
+                let timeout_thread = thread::spawn(move || {
+                    thread::sleep(timeout);
+                });
+                timeout_thread.join().unwrap();
+            }
+
             let new_img = Arc::new(save_screenshot(&rect,path.clone(),file_name.clone(),*file_format, *monitor as usize));
             let main_id = main_window_id;
+
             ctx.get_external_handle()
                 .submit_command(sys_cmd::SHOW_WINDOW, (), *main_id)
                 .expect("Error sending the event to the window");
@@ -140,8 +153,9 @@ impl<T: Data> Widget<T> for TakeScreenshotButton<T> {
             Event::Command(cmd) => {
                 if cmd.is(SAVE_SCREENSHOT) {
                     ctx.window().hide();
-                    let (rect,main_window_id,custom_zstack_id,screenshot_id,path,file_name,file_format, monitor) = cmd.get_unchecked(SAVE_SCREENSHOT);
-                    self.taking_screenshot = Some((*rect,*main_window_id,*custom_zstack_id,*screenshot_id,path.clone(),file_name.clone(),*file_format,*monitor));
+                    let (rect,main_window_id,custom_zstack_id,screenshot_id,path,file_name,file_format, delay, monitor) = cmd.get_unchecked(SAVE_SCREENSHOT);
+                    let timeout = Duration::from_secs(*delay);
+                    self.taking_screenshot = Some((*rect,*main_window_id,*custom_zstack_id,*screenshot_id,path.clone(),file_name.clone(),*file_format, timeout, *monitor));
                     ctx.request_layout();
                 }
             }
@@ -278,9 +292,10 @@ fn save_screenshot(rect: &Rect, base_path: Box<str>, file_name: Box<str>, format
     let image = screen.capture_area(rect.x0 as i32, rect.y0 as i32, rect.width() as u32, rect.height() as u32).unwrap();
 
     let dyn_img = DynamicImage::from(
-        image
+        image.clone()
     );
     let path = format!("{}{}.{}", base_path, file_name, format.extensions_str().first().unwrap());
-    dyn_img.save_with_format(path,format).unwrap();
+    dyn_img.save_with_format(path.clone(), format).unwrap();
+
     dyn_img
 }
