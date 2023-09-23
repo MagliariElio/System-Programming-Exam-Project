@@ -198,7 +198,7 @@ impl AppDelegate<AppState> for Delegate {
                     );
                     ctx.submit_command(
                         SHOW_OVER_IMG
-                            .with(OverImages::Remove)
+                            .with((OverImages::Remove, None))
                             .to(Target::Widget(WidgetId::next())),
                     );
                     data.state = State::ScreenTaken(ImageModified::NotSavable);
@@ -486,7 +486,7 @@ fn build_root_widget() -> impl Widget<AppState> {
             );
             ctx.submit_command(
                 SHOW_OVER_IMG
-                    .with(OverImages::Remove)
+                    .with((OverImages::Remove, None))
                     .to(Target::Widget(data.custom_zstack_id.unwrap())),
             );
             data.state = State::ScreenTaken(ImageModified::NotSavable);
@@ -670,7 +670,7 @@ fn build_root_widget() -> impl Widget<AppState> {
             move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
                 ctx.submit_command(
                     SHOW_OVER_IMG
-                        .with(OverImages::Circles)
+                        .with((OverImages::Circles, None))
                         .to(Target::Widget(*ZSTACK_ID)),
                 );
                 data.state = State::ScreenTaken(ImageModified::Savable);
@@ -685,7 +685,7 @@ fn build_root_widget() -> impl Widget<AppState> {
             move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
                 ctx.submit_command(
                     SHOW_OVER_IMG
-                        .with(OverImages::Triangle)
+                        .with((OverImages::Triangle, None))
                         .to(Target::Widget(*ZSTACK_ID)),
                 );
                 data.state = State::ScreenTaken(ImageModified::Savable);
@@ -699,7 +699,7 @@ fn build_root_widget() -> impl Widget<AppState> {
             move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
                 ctx.submit_command(
                     SHOW_OVER_IMG
-                        .with(OverImages::Arrow)
+                        .with((OverImages::Arrow, None))
                         .to(Target::Widget(*ZSTACK_ID)),
                 );
                 data.state = State::ScreenTaken(ImageModified::Savable);
@@ -713,7 +713,7 @@ fn build_root_widget() -> impl Widget<AppState> {
             move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
                 ctx.submit_command(
                     SHOW_OVER_IMG
-                        .with(OverImages::Highlighter)
+                        .with((OverImages::Highlighter, None))
                         .to(Target::Widget(*ZSTACK_ID)),
                 );
                 data.state = State::ScreenTaken(ImageModified::Savable);
@@ -724,7 +724,7 @@ fn build_root_widget() -> impl Widget<AppState> {
     let text_button = Either::new(
         |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::NotSavable),
         Button::from_label(Label::new("Text")).on_click(
-            move |_ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
+            move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
                 data.text_field_zstack = true;
             },
         ),
@@ -769,7 +769,7 @@ fn build_root_widget() -> impl Widget<AppState> {
             move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
                 ctx.submit_command(
                     SHOW_OVER_IMG
-                        .with(OverImages::Remove)
+                        .with((OverImages::Remove, None))
                         .to(Target::Widget(*ZSTACK_ID)),
                 );
                 data.state = State::ScreenTaken(ImageModified::NotSavable);
@@ -890,23 +890,26 @@ fn build_root_widget() -> impl Widget<AppState> {
         |data: &AppState, _| data.text_field_zstack,
         Flex::row()
             .with_child(druid::widget::TextBox::new().lens(AppState::text_field))
+            .with_default_spacer()
             .with_child(Button::from_label(Label::new("Save")).on_click(
                 move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
-
-                    println!("{}", data.text_field);
-
                     ctx.submit_command(
                         SHOW_OVER_IMG
-                            .with(OverImages::Highlighter)
+                            .with((OverImages::Highlighter, Some(data.text_field.clone())))
                             .to(Target::Widget(*ZSTACK_ID)),
                     );
-                    data.state = State::ScreenTaken(ImageModified::Savable);
-                }
-            ))
-            .with_child(Button::from_label(Label::new("Cancel")).on_click(
-                move |_ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
                     data.text_field = "".to_string();
                     data.text_field_zstack = false;
+                    data.state = State::ScreenTaken(ImageModified::Savable);
+                    ctx.request_update();
+                }
+            ))
+            .with_default_spacer()
+            .with_child(Button::from_label(Label::new("Cancel")).on_click(
+                move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
+                    data.text_field = "".to_string();
+                    data.text_field_zstack = false;
+                    ctx.request_update();
                 }
             )),
         Label::new(""),
@@ -916,6 +919,7 @@ fn build_root_widget() -> impl Widget<AppState> {
         Flex::column()
             .with_default_spacer()
             .with_child(Flex::row().with_child(buttons_bar))
+            .with_default_spacer()
             .with_child(text_field)
             .with_default_spacer()
             .with_child(Flex::row().with_child(alert_row))

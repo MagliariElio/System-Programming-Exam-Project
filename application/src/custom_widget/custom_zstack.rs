@@ -17,10 +17,11 @@ pub enum OverImages{
     Arrow,
     Highlighter,
     Remove,
+    Text,
 }
 pub const UPDATE_BACK_IMG: Selector<Arc<DynamicImage>> = Selector::new("Update the back image");
 pub const UPDATE_COLOR: Selector<(Option<Color>,Option<f64>)> = Selector::new("Update the over-img color");
-pub const SHOW_OVER_IMG: Selector<OverImages> = Selector::new("Tell the ZStack to show the over_img, params: over_img path");
+pub const SHOW_OVER_IMG: Selector<(OverImages, Option<String>)> = Selector::new("Tell the ZStack to show the over_img, params: over_img path");
 pub const SAVE_OVER_IMG: Selector<(Box<str>, Box<str>, image::ImageFormat)> = Selector::new("Tell the ZStack to save the modified screenshot, params: (Screenshot original img's path, Folder Path Where To Save, New File Name, Image Format)");
 pub const CREATE_ZSTACK: Selector<Vec<&'static str>> = Selector::new("Initialized the over-images");
 /// A container that stacks its children on top of each other.
@@ -35,6 +36,7 @@ pub struct CustomZStack<T> {
     color:(Option<Color>,f64),
     over_images: Option<Vec<DynamicImage>>,
     showing_over_img: Option<usize>,
+    text_field: Option<String>
 }
 
 struct ZChild<T> {
@@ -64,6 +66,7 @@ impl <T: Data> CustomZStack<T>  {
             color: (None,100.),
             over_images: None,
             showing_over_img: None,
+            text_field: None
         }
     }
 
@@ -125,7 +128,15 @@ impl <T: Data> CustomZStack<T>  {
     pub fn show_over_img(self: &mut Self, over_img_index: usize, id: WidgetId){
         if self.showing_over_img.is_none() {
             //TODO: Make this async! (Rust seams to don't have a stream management lib, I don't want to implement it!)
-            let img = self.over_images.as_mut().unwrap().get_mut(over_img_index).unwrap();
+            let mut image = None;
+
+            if self.text_field != None && over_img_index == 4 {
+                // TODO: trasforma il testo in un dynamic image
+            } else {
+                image = Some(self.over_images.as_mut().unwrap().get_mut(over_img_index).unwrap());
+            }
+
+            let img = image.unwrap();
 
             let over_image = ResizableBox::new(Image::new(ImageBuf::from_raw(
                 Arc::<[u8]>::from(img.as_bytes()), ImageFormat::RgbaSeparate, img.width() as usize, img.height() as usize
@@ -201,12 +212,18 @@ impl<T: Data> Widget<T> for CustomZStack<T> {
                     }
                 }
                 if cmd.is(SHOW_OVER_IMG) {
-                    let path = cmd.get_unchecked(SHOW_OVER_IMG);
+                    let (path,text_field) = cmd.get_unchecked(SHOW_OVER_IMG);
                     match path{
                         OverImages::Circles => {self.show_over_img(0, ctx.widget_id());}
                         OverImages::Triangle => {self.show_over_img(1, ctx.widget_id());}
                         OverImages::Arrow => {self.show_over_img(2, ctx.widget_id());}
                         OverImages::Highlighter => {self.show_over_img(3, ctx.widget_id());}
+                        OverImages::Text => {
+                            if let Some(text) = text_field {
+                                self.text_field = Some((*text).clone());
+                            }
+                            self.show_over_img(4, ctx.widget_id());
+                        }
                         OverImages::Remove => {if self.showing_over_img.is_some(){self.show_over_img(0, ctx.widget_id());}}
                     }
 
