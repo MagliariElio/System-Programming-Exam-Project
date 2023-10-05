@@ -14,6 +14,8 @@ screenshots = "0.8.0"
 tracing = "0.1.37"
 lazy_static = "1.4.0"
 clippers = "0.1.2"
+imageproc="0.23.0"
+rusttype="0.9.3"
 [dependencies.druid]
 version = "0.8.3"
 features = ["im","svg","image-all","image","serde"]

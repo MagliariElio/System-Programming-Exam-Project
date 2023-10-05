@@ -2,11 +2,13 @@ use std::sync::Arc;
 use druid::{BoxConstraints, Data, Env, Event, EventCtx, InternalEvent, LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx, Point, Rect, Size, UnitPoint, UpdateCtx, Vec2, Widget, WidgetExt, WidgetPod, ImageBuf, WidgetId, Target, Color, Selector, commands};
 use druid::kurbo::common::FloatExt;
 use druid::piet::ImageFormat;
-use image::{ImageFormat as imgFormat};
+use image::{ImageFormat as imgFormat, Rgba};
 use druid::widget::{Image};
 use image::{DynamicImage, GenericImage, GenericImageView, Pixel};
 use image::imageops::FilterType;
 use image::io::Reader;
+use imageproc::drawing::draw_text_mut;
+use rusttype::{Font, Scale};
 use crate::custom_widget::resizable_box::UPDATE_ORIGIN;
 use crate::custom_widget::{ResizableBox};
 use crate::custom_widget::screenshot_image::UPDATE_SCREENSHOT;
@@ -17,10 +19,11 @@ pub enum OverImages{
     Arrow,
     Highlighter,
     Remove,
+    Text,
 }
 pub const UPDATE_BACK_IMG: Selector<Arc<DynamicImage>> = Selector::new("Update the back image");
 pub const UPDATE_COLOR: Selector<(Option<Color>,Option<f64>)> = Selector::new("Update the over-img color");
-pub const SHOW_OVER_IMG: Selector<OverImages> = Selector::new("Tell the ZStack to show the over_img, params: over_img path");
+pub const SHOW_OVER_IMG: Selector<(OverImages, Option<String>)> = Selector::new("Tell the ZStack to show the over_img, params: over_img path");
 pub const SAVE_OVER_IMG: Selector<(Box<str>, Box<str>, image::ImageFormat)> = Selector::new("Tell the ZStack to save the modified screenshot, params: (Screenshot original img's path, Folder Path Where To Save, New File Name, Image Format)");
 pub const CREATE_ZSTACK: Selector<Vec<&'static str>> = Selector::new("Initialized the over-images");
 /// A container that stacks its children on top of each other.
@@ -35,6 +38,7 @@ pub struct CustomZStack<T> {
     color:(Option<Color>,f64),
     over_images: Option<Vec<DynamicImage>>,
     showing_over_img: Option<usize>,
+    text_field: Option<String>
 }
 
 struct ZChild<T> {
@@ -64,6 +68,7 @@ impl <T: Data> CustomZStack<T>  {
             color: (None,100.),
             over_images: None,
             showing_over_img: None,
+            text_field: None
         }
     }
 
@@ -125,7 +130,26 @@ impl <T: Data> CustomZStack<T>  {
     pub fn show_over_img(self: &mut Self, over_img_index: usize, id: WidgetId){
         if self.showing_over_img.is_none() {
             //TODO: Make this async! (Rust seams to don't have a stream management lib, I don't want to implement it!)
-            let img = self.over_images.as_mut().unwrap().get_mut(over_img_index).unwrap();
+            let mut image = None;
+            if image == None {}
+
+            if self.text_field != None && over_img_index == 4 {
+                let image_modified = text_to_image(self.text_field.as_mut().unwrap().as_str());
+                let over_images_cloned = self.over_images.as_mut().unwrap();
+
+                if over_images_cloned.len() > over_img_index {
+                    over_images_cloned[over_img_index] = image_modified.clone();
+                } else {
+                    over_images_cloned.push(image_modified.clone());
+                }
+
+                //self.over_images = Some(over_images_cloned);
+                image = Some(image_modified);
+            } else {
+                image = Some(self.over_images.as_mut().unwrap().get_mut(over_img_index).unwrap().clone());
+            }
+
+            let img = image.unwrap();
 
             let over_image = ResizableBox::new(Image::new(ImageBuf::from_raw(
                 Arc::<[u8]>::from(img.as_bytes()), ImageFormat::RgbaSeparate, img.width() as usize, img.height() as usize
@@ -189,6 +213,40 @@ impl <T: Data> CustomZStack<T>  {
     }
 }
 
+fn calculate_text_width(font: Font, scale: Scale, text: &str) -> u32 {
+    let mut width = 0;
+
+    for c in text.chars() {
+        let glyph = font.glyph(c).scaled(scale);
+        width += glyph.h_metrics().advance_width.ceil() as u32;
+    }
+
+    width
+}
+
+fn text_to_image(text: &str) -> DynamicImage {
+    let font_data: &[u8] = include_bytes!("../images/icons/DejaVuSans.ttf");
+    let font = Font::try_from_bytes(font_data).unwrap();
+
+    let scale = Scale::uniform(30.0);
+
+    let width = calculate_text_width(font.clone(), scale, text);
+    let height = 25;
+    let mut image = DynamicImage::new_rgba8(width, height);
+
+    draw_text_mut(
+        &mut image,
+        Rgba([255, 255, 255, 255]),
+        0,
+        0,
+        scale,
+        &font,
+        text,
+    );
+
+    image
+}
+
 impl<T: Data> Widget<T> for CustomZStack<T> {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut T, env: &Env) {
         match event {
@@ -201,12 +259,18 @@ impl<T: Data> Widget<T> for CustomZStack<T> {
                     }
                 }
                 if cmd.is(SHOW_OVER_IMG) {
-                    let path = cmd.get_unchecked(SHOW_OVER_IMG);
+                    let (path,text_field) = cmd.get_unchecked(SHOW_OVER_IMG);
                     match path{
                         OverImages::Circles => {self.show_over_img(0, ctx.widget_id());}
                         OverImages::Triangle => {self.show_over_img(1, ctx.widget_id());}
                         OverImages::Arrow => {self.show_over_img(2, ctx.widget_id());}
                         OverImages::Highlighter => {self.show_over_img(3, ctx.widget_id());}
+                        OverImages::Text => {
+                            if let Some(text) = text_field {
+                                self.text_field = Some((*text).clone());
+                            }
+                            self.show_over_img(4, ctx.widget_id());
+                        }
                         OverImages::Remove => {if self.showing_over_img.is_some(){self.show_over_img(0, ctx.widget_id());}}
                     }
 
