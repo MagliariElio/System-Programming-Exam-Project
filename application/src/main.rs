@@ -78,7 +78,7 @@ struct AppState {
     shortcut_keys: ShortcutKeys,
     #[data(ignore)]
     text_field_zstack: bool,
-    text_field: String
+    text_field: String,
 }
 
 fn main() {
@@ -117,8 +117,8 @@ fn main() {
             pressed_hot_keys: HashSet::new(),
             state: StateShortcutKeys::NotBusy,
         },
-        text_field_zstack: false,
-        text_field: "".to_string()
+        text_field_zstack: true,
+        text_field: "".to_string(),
     };
 
     let delegate = Delegate;
@@ -425,6 +425,7 @@ fn build_screenshot_widget(monitor: usize) -> impl Widget<AppState> {
         data.shortcut_keys.pressed_hot_keys = HashSet::new(); // clean map
         data.shortcut_keys.state = StateShortcutKeys::NotBusy; // it has finished its job
 
+        data.state = State::Start;
         ctx.get_external_handle()
             .submit_command(sys_cmd::SHOW_WINDOW, (), main_id)
             .expect("Error sending the event");
@@ -721,15 +722,49 @@ fn build_root_widget() -> impl Widget<AppState> {
         ),
         Label::new(""),
     );
+
+    let text_field = Either::new(
+        |data: &AppState, _| data.text_field_zstack == true && data.state == State::ScreenTaken(ImageModified::NotSavable),
+        Flex::row()
+            .with_child(druid::widget::TextBox::new()
+                .with_placeholder("Insert a text...")
+                .lens(AppState::text_field))
+            .with_default_spacer()
+            .with_child(Button::from_label(Label::new("Save")).on_click(
+                move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
+                    ctx.submit_command(
+                        SHOW_OVER_IMG
+                            .with((OverImages::Text, Some(data.text_field.clone())))
+                            .to(Target::Widget(*ZSTACK_ID)),
+                    );
+                    data.text_field = "".to_string();
+                    data.text_field_zstack = false;
+                    data.state = State::ScreenTaken(ImageModified::Savable);
+                    ctx.request_update();
+                },
+            ))
+            .with_default_spacer()
+            .with_child(Button::from_label(Label::new("Cancel")).on_click(
+                move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
+                    data.text_field = "".to_string();
+                    data.text_field_zstack = false;
+                    ctx.request_update();
+                },
+            )),
+        Label::new(""),
+    );
+
     let text_button = Either::new(
         |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::NotSavable),
         Button::from_label(Label::new("Text")).on_click(
             move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
                 data.text_field_zstack = true;
+                ctx.submit_command(sys_cmd::SHOW_ALL);
             },
         ),
         Label::new(""),
     );
+
     let colors_button = Either::new(
         |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::NotSavable),
         ColoredButton::from_label(Label::new("Color"))
@@ -835,6 +870,8 @@ fn build_root_widget() -> impl Widget<AppState> {
         .with_default_spacer()
         .with_child(colors_button)
         .with_spacer(40.)
+        .with_child(text_field)
+        .with_default_spacer()
         .with_child(file_name_label)
         .with_default_spacer()
         .with_child(path_button)
@@ -886,41 +923,10 @@ fn build_root_widget() -> impl Widget<AppState> {
         ))
         .center();
 
-    let text_field = Either::new(
-        |data: &AppState, _| data.text_field_zstack,
-        Flex::row()
-            .with_child(druid::widget::TextBox::new().lens(AppState::text_field))
-            .with_default_spacer()
-            .with_child(Button::from_label(Label::new("Save")).on_click(
-                move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
-                    ctx.submit_command(
-                        SHOW_OVER_IMG
-                            .with((OverImages::Highlighter, Some(data.text_field.clone())))
-                            .to(Target::Widget(*ZSTACK_ID)),
-                    );
-                    data.text_field = "".to_string();
-                    data.text_field_zstack = false;
-                    data.state = State::ScreenTaken(ImageModified::Savable);
-                    ctx.request_update();
-                }
-            ))
-            .with_default_spacer()
-            .with_child(Button::from_label(Label::new("Cancel")).on_click(
-                move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
-                    data.text_field = "".to_string();
-                    data.text_field_zstack = false;
-                    ctx.request_update();
-                }
-            )),
-        Label::new(""),
-    );
-
     let scroll = Scroll::new(
         Flex::column()
             .with_default_spacer()
             .with_child(Flex::row().with_child(buttons_bar))
-            .with_default_spacer()
-            .with_child(text_field)
             .with_default_spacer()
             .with_child(Flex::row().with_child(alert_row))
             .with_default_spacer()

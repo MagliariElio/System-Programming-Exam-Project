@@ -2,11 +2,13 @@ use std::sync::Arc;
 use druid::{BoxConstraints, Data, Env, Event, EventCtx, InternalEvent, LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx, Point, Rect, Size, UnitPoint, UpdateCtx, Vec2, Widget, WidgetExt, WidgetPod, ImageBuf, WidgetId, Target, Color, Selector, commands};
 use druid::kurbo::common::FloatExt;
 use druid::piet::ImageFormat;
-use image::{ImageFormat as imgFormat};
+use image::{ImageFormat as imgFormat, Rgba};
 use druid::widget::{Image};
 use image::{DynamicImage, GenericImage, GenericImageView, Pixel};
 use image::imageops::FilterType;
 use image::io::Reader;
+use imageproc::drawing::draw_text_mut;
+use rusttype::{Font, Scale};
 use crate::custom_widget::resizable_box::UPDATE_ORIGIN;
 use crate::custom_widget::{ResizableBox};
 use crate::custom_widget::screenshot_image::UPDATE_SCREENSHOT;
@@ -129,11 +131,22 @@ impl <T: Data> CustomZStack<T>  {
         if self.showing_over_img.is_none() {
             //TODO: Make this async! (Rust seams to don't have a stream management lib, I don't want to implement it!)
             let mut image = None;
+            if image == None {}
 
             if self.text_field != None && over_img_index == 4 {
-                // TODO: trasforma il testo in un dynamic image
+                let image_modified = text_to_image(self.text_field.as_mut().unwrap().as_str());
+                let over_images_cloned = self.over_images.as_mut().unwrap();
+
+                if over_images_cloned.len() > over_img_index {
+                    over_images_cloned[over_img_index] = image_modified.clone();
+                } else {
+                    over_images_cloned.push(image_modified.clone());
+                }
+
+                //self.over_images = Some(over_images_cloned);
+                image = Some(image_modified);
             } else {
-                image = Some(self.over_images.as_mut().unwrap().get_mut(over_img_index).unwrap());
+                image = Some(self.over_images.as_mut().unwrap().get_mut(over_img_index).unwrap().clone());
             }
 
             let img = image.unwrap();
@@ -198,6 +211,40 @@ impl <T: Data> CustomZStack<T>  {
             None
         }
     }
+}
+
+fn calculate_text_width(font: Font, scale: Scale, text: &str) -> u32 {
+    let mut width = 0;
+
+    for c in text.chars() {
+        let glyph = font.glyph(c).scaled(scale);
+        width += glyph.h_metrics().advance_width.ceil() as u32;
+    }
+
+    width
+}
+
+fn text_to_image(text: &str) -> DynamicImage {
+    let font_data: &[u8] = include_bytes!("../images/icons/DejaVuSans.ttf");
+    let font = Font::try_from_bytes(font_data).unwrap();
+
+    let scale = Scale::uniform(30.0);
+
+    let width = calculate_text_width(font.clone(), scale, text);
+    let height = 25;
+    let mut image = DynamicImage::new_rgba8(width, height);
+
+    draw_text_mut(
+        &mut image,
+        Rgba([255, 255, 255, 255]),
+        0,
+        0,
+        scale,
+        &font,
+        text,
+    );
+
+    image
 }
 
 impl<T: Data> Widget<T> for CustomZStack<T> {
