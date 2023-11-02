@@ -1,9 +1,10 @@
 use std::sync::Arc;
+use druid::commands::SHOW_ABOUT;
 use druid::{BoxConstraints, Data, Env, Event, EventCtx, InternalEvent, LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx, Point, Rect, Size, UnitPoint, UpdateCtx, Vec2, Widget, WidgetExt, WidgetPod, ImageBuf, WidgetId, Target, Color, Selector, commands};
 use druid::kurbo::common::FloatExt;
 use druid::piet::ImageFormat;
 use image::{ImageFormat as imgFormat, Rgba};
-use druid::widget::{Image};
+use druid::widget::{Image, Label};
 use image::{DynamicImage, GenericImage, GenericImageView, Pixel};
 use image::imageops::FilterType;
 use image::io::Reader;
@@ -333,7 +334,7 @@ impl<T: Data> Widget<T> for CustomZStack<T> {
                         over_images.push(over_img);
                     });
                     self.over_images = Some(over_images);
-                } else if cmd.is(UPDATE_BACK_IMG){
+                }else if cmd.is(UPDATE_BACK_IMG){
                     let back_img = cmd.get_unchecked(UPDATE_BACK_IMG);
                     self.back_img = Some((**back_img).clone());
                 }

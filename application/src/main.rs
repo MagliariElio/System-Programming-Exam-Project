@@ -5,12 +5,13 @@ use crate::custom_widget::{
     ShortcutKeys, StateShortcutKeys, TakeScreenshotButton, CREATE_ZSTACK, SAVE_OVER_IMG,
     SAVE_SCREENSHOT, SHORTCUT_KEYS, SHOW_OVER_IMG, UPDATE_BACK_IMG, UPDATE_COLOR,
 };
+use druid::commands::SHOW_ABOUT;
 use druid::keyboard_types::Code;
 use druid::piet::ImageFormat;
 use druid::widget::{
     Align, Button, Click, Container, ControllerHost, CrossAxisAlignment, Either, Flex,
     IdentityWrapper, Label, LensWrap, MainAxisAlignment, Scroll, Stepper, TextBox, ViewSwitcher,
-    ZStack,
+    ZStack, LineBreaking,
 };
 use druid::Target::{Auto, Window};
 use druid::{
@@ -229,6 +230,22 @@ impl AppDelegate<AppState> for Delegate {
                 .replace("\\", "/");
             data.base_path.push('/');
             return Handled::Yes;
+        } else if cmd.is(SHOW_ABOUT){
+            let monitors = Screen::get_monitors();
+            let index: usize =
+                std::str::FromStr::from_str(data.screen.trim_start_matches(".")).unwrap();
+            let monitor = monitors.get(index).unwrap();
+            let window_aboutus = WindowDesc::new(build_about_us_widget())
+                .title(LocalizedString::new("About Us"))
+                .set_always_on_top(false)
+                .transparent(true)
+                .resizable(true)
+                .show_titlebar(true)
+                .window_size((400., 200.))
+                .set_position(monitor.virtual_rect().origin())
+                .with_min_size(Size::new(450., 300.));
+
+            ctx.new_window(window_aboutus);
         } else if cmd.is(SHORTCUT_KEYS) {
             let monitors = Screen::get_monitors();
             let index: usize =
@@ -250,7 +267,21 @@ impl AppDelegate<AppState> for Delegate {
         Handled::No
     }
 }
+fn build_about_us_widget() -> impl Widget<AppState> {
 
+    let flex_default = Flex::row()
+        .with_child(Label::new("This application was brought to you by Elio Magliari, Pietro Bertorelle and Francesco Abate")
+            .with_line_break_mode(LineBreaking::WordWrap)
+            .with_text_color(Color::BLACK)
+            .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
+            .with_text_size(20.)
+            .align_vertical(UnitPoint::TOP)
+            .align_horizontal(UnitPoint::CENTER))
+        .background(Color::WHITE);
+        
+        
+    flex_default
+}
 fn build_shortcut_keys_widget() -> impl Widget<AppState> {
     let message_comb_not_available = Label::new("Combination Not Available!")
         .with_text_color(Color::RED)
@@ -492,7 +523,37 @@ fn build_root_widget() -> impl Widget<AppState> {
             );
             data.state = State::ScreenTaken(ImageModified::NotSavable);
         });
-
+    let edit_screenshot_button = Either::new(|data: &AppState, _env | data.state == State::ScreenTaken(ImageModified::NotSavable),
+    ColoredButton::from_label(Label::new("Edit ScreenShot"))
+    .with_color(Color::rgb(0., 0., 255.))
+    .on_click(move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
+        data.main_window_id = Some(ctx.window_id());
+        data.custom_zstack_id = Some(*ZSTACK_ID);
+        data.screenshot_id = Some(*SCREENSHOT_WIDGET_ID);
+        ctx.submit_command(sys_cmd::HIDE_WINDOW.to(Auto));
+        let monitors = Screen::get_monitors();
+        let index: usize =
+            std::str::FromStr::from_str(data.screen.trim_start_matches(".")).unwrap();
+        let monitor = monitors.get(index).unwrap();
+        ctx.new_window(
+            WindowDesc::new(build_screenshot_widget(index))
+                .title(WINDOW_TITLE)
+                .set_always_on_top(true)
+                .transparent(true)
+                .resizable(false)
+                .show_titlebar(false)
+                .set_window_state(WindowState::Maximized)
+                .set_position(monitor.virtual_rect().origin()),
+        );
+        ctx.submit_command(
+            SHOW_OVER_IMG
+                .with((OverImages::Remove, None))
+                .to(Target::Widget(data.custom_zstack_id.unwrap())),
+        );
+        data.state = State::ScreenTaken(ImageModified::NotSavable);
+    }),
+    Label::new(""),
+);
     let screenshot_image = IdentityWrapper::wrap(
         ScreenshotImage::new(ImageBuf::from_raw(
             Arc::<[u8]>::from(Vec::from([0, 0, 0, 0]).as_slice()),
@@ -907,7 +968,9 @@ fn build_root_widget() -> impl Widget<AppState> {
         .with_child(extension_selector)
         .with_default_spacer()
         .with_child(save_button)
-        .with_spacer(40.)
+        .with_default_spacer()
+        .with_child(Container::new(edit_screenshot_button))
+        .with_default_spacer()
         .with_flex_child(Container::new(take_screenshot_button), 1.0)
         .with_default_spacer()
         .with_child(Label::new("Select Screen:").with_text_color(Color::BLACK.with_alpha(0.85)))
