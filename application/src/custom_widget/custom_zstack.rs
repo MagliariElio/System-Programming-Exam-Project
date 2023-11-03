@@ -1,10 +1,9 @@
 use std::sync::Arc;
-use druid::commands::SHOW_ABOUT;
 use druid::{BoxConstraints, Data, Env, Event, EventCtx, InternalEvent, LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx, Point, Rect, Size, UnitPoint, UpdateCtx, Vec2, Widget, WidgetExt, WidgetPod, ImageBuf, WidgetId, Target, Color, Selector, commands};
 use druid::kurbo::common::FloatExt;
 use druid::piet::ImageFormat;
 use image::{ImageFormat as imgFormat, Rgba};
-use druid::widget::{Image, Label};
+use druid::widget::{Image};
 use image::{DynamicImage, GenericImage, GenericImageView, Pixel};
 use image::imageops::FilterType;
 use image::io::Reader;

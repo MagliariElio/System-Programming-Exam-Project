@@ -275,8 +275,12 @@ fn build_about_us_widget() -> impl Widget<AppState> {
             .with_text_color(Color::BLACK)
             .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
             .with_text_size(20.)
+            .with_text_alignment(TextAlignment::Center)
+            .fix_size(200.,200.)
+            .center()
             .align_vertical(UnitPoint::TOP)
             .align_horizontal(UnitPoint::CENTER))
+        .center()
         .background(Color::WHITE);
         
         
@@ -396,7 +400,95 @@ fn alert_widget() -> impl Widget<AppState> {
         .center();
     alert
 }
+fn edit_screenshot_widget(monitor: usize) -> impl Widget<AppState>{
+    let rectangle = LensWrap::new(SelectedRect::new(monitor), AppState::rect);
 
+    let edit_screenshot_button = TakeScreenshotButton::from_label(
+        Label::new("Edit Screenshot")
+            .with_text_color(Color::BLACK)
+            .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
+            .with_text_size(20.),
+    )
+    .with_color(Color::rgb8(70, 250, 70).with_alpha(1.))
+    .on_click(|ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
+        let (base_path, name) = file_name(data.name.clone(), data.base_path.clone());
+        data.alert
+            .show_alert("The new version of the image has been saved on the disk!"); // TODO: it should be moved after saving the image
+
+        data.shortcut_keys.state = StateShortcutKeys::NotBusy; // reset of shortcut state
+
+        ctx.submit_command(
+            SAVE_SCREENSHOT
+                .with((
+                    data.rect,
+                    data.main_window_id.expect("How did you open this window?"),
+                    data.custom_zstack_id
+                        .expect("How did you open this window?"),
+                    data.screenshot_id.expect("How did you open this window?"),
+                    base_path,
+                    name,
+                    image::ImageFormat::from_extension(data.extension.trim_start_matches("."))
+                        .unwrap(),
+                    data.delay as u64,
+                    std::str::FromStr::from_str(data.screen.trim_start_matches(".")).unwrap(),
+                ))
+                .to(Target::Widget(ctx.widget_id())),
+        );
+        data.state = State::ScreenTaken(ImageModified::NotSavable);
+    });
+
+    let delay_value = Label::dynamic(|data: &AppState, _env| data.delay.to_string())
+        .with_text_color(Color::WHITE)
+        .background(Color::BLACK.with_alpha(0.55));
+    let delay_stepper = Stepper::new()
+        .with_range(0.0, 20.0)
+        .with_step(1.0)
+        .with_wraparound(true)
+        .lens(AppState::delay);
+
+    let close_button = ColoredButton::from_label(
+        Label::new("Close")
+            .with_text_color(Color::BLACK)
+            .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
+            .with_text_size(20.),
+    )
+    .with_color(Color::rgb8(250, 70, 70).with_alpha(1.))
+    .on_click(|ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
+        let main_id = data.main_window_id.expect("How did you open this window?");
+
+        data.shortcut_keys.pressed_hot_keys = HashSet::new(); // clean map
+        data.shortcut_keys.state = StateShortcutKeys::NotBusy; // it has finished its job
+
+        data.state = State::Start;
+        ctx.get_external_handle()
+            .submit_command(sys_cmd::SHOW_WINDOW, (), main_id)
+            .expect("Error sending the event");
+        ctx.window().close();
+    });
+
+    let buttons_flex = Flex::row()
+        .with_child(edit_screenshot_button)
+        .with_default_spacer()
+        .with_child(delay_value)
+        .with_child(delay_stepper)
+        .with_default_spacer()
+        .with_child(close_button);
+
+    /*let label_container = Container::new(label)
+    .background(Color::BLACK.with_alpha(0.35));*/
+
+    let zstack = ZStack::new(rectangle)
+        //.with_child(label_container, Vec2::new(1.0, 1.0), Vec2::ZERO, UnitPoint::LEFT, Vec2::new(10.0, 0.0))
+        .with_child(
+            buttons_flex,
+            Vec2::new(1.0, 1.0),
+            Vec2::ZERO,
+            UnitPoint::BOTTOM_RIGHT,
+            Vec2::new(-100.0, -100.0),
+        );
+
+    zstack
+}
 fn build_screenshot_widget(monitor: usize) -> impl Widget<AppState> {
     let rectangle = LensWrap::new(SelectedRect::new(monitor), AppState::rect);
 
@@ -536,7 +628,7 @@ fn build_root_widget() -> impl Widget<AppState> {
             std::str::FromStr::from_str(data.screen.trim_start_matches(".")).unwrap();
         let monitor = monitors.get(index).unwrap();
         ctx.new_window(
-            WindowDesc::new(build_screenshot_widget(index))
+            WindowDesc::new(edit_screenshot_widget(index))
                 .title(WINDOW_TITLE)
                 .set_always_on_top(true)
                 .transparent(true)
