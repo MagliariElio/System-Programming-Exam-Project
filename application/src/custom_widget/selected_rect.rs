@@ -35,12 +35,20 @@ impl SelectedRect {
             .get(monitor).expect("Can't find the selected monitor!")
             .virtual_rect();
 
+        println!("monitor rect: {}", primary_monitor_rect);
+        println!("x0: {}", primary_monitor_rect.x0);
+        println!("y0: {}", primary_monitor_rect.y0);
+        println!("x1: {}", primary_monitor_rect.x1);
+        println!("y1: {}", primary_monitor_rect.y1);
+        println!("width: {}", primary_monitor_rect.width());
+        println!("height: {}\n", primary_monitor_rect.height());
+
         Self {
             rect: Rect{
-                x0 : primary_monitor_rect.x0+5.,
-                y0 : primary_monitor_rect.y0+5.,
-                x1 : primary_monitor_rect.x1-5.,
-                y1 : primary_monitor_rect.y1-5.,
+                x0 : 5.,
+                y0 : 5.,
+                x1 : primary_monitor_rect.width()-5.,
+                y1 : primary_monitor_rect.height()-5.,
             },
             mouse: IfMousePressedWhere::NotInterested,
             show_overlay: false,
