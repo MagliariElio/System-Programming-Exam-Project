@@ -185,7 +185,8 @@ impl AppDelegate<AppState> for Delegate {
                     // start the screen grabber
                     data.main_window_id = Some(window_id);
                     ctx.submit_command(sys_cmd::HIDE_WINDOW.to(Target::Window(window_id)));
-                    let monitors = Screen::get_monitors();
+                    let mut monitors = Screen::get_monitors();
+                    monitors.sort_by_key(|monitor| !monitor.is_primary());
                     let index: usize =
                         std::str::FromStr::from_str(data.screen.trim_start_matches(".")).unwrap();
                     let monitor = monitors.get(index).unwrap();
@@ -233,7 +234,8 @@ impl AppDelegate<AppState> for Delegate {
             data.base_path.push('/');
             return Handled::Yes;
         } else if cmd.is(SHOW_ABOUT) {
-            let monitors = Screen::get_monitors();
+            let mut monitors = Screen::get_monitors();
+            monitors.sort_by_key(|monitor| !monitor.is_primary());
             let index: usize =
                 std::str::FromStr::from_str(data.screen.trim_start_matches(".")).unwrap();
             let monitor = monitors.get(index).unwrap();
@@ -249,7 +251,8 @@ impl AppDelegate<AppState> for Delegate {
 
             ctx.new_window(window_aboutus);
         } else if cmd.is(SHORTCUT_KEYS) {
-            let monitors = Screen::get_monitors();
+            let mut monitors = Screen::get_monitors();
+            monitors.sort_by_key(|monitor| !monitor.is_primary());
             let index: usize =
                 std::str::FromStr::from_str(data.screen.trim_start_matches(".")).unwrap();
             let monitor = monitors.get(index).unwrap();
@@ -594,9 +597,13 @@ fn build_root_widget() -> impl Widget<AppState> {
             data.custom_zstack_id = Some(*ZSTACK_ID);
             data.screenshot_id = Some(*SCREENSHOT_WIDGET_ID);
             ctx.submit_command(sys_cmd::HIDE_WINDOW.to(Auto));
-            let monitors = Screen::get_monitors();
+
+            let mut monitors = Screen::get_monitors();
+            monitors.sort_by_key(|monitor| !monitor.is_primary());
             let index: usize = std::str::FromStr::from_str(data.screen.trim_start_matches(".")).unwrap();
+            monitors.sort_by_key(|monitor| !monitor.is_primary());
             let monitor = monitors.get(index).unwrap();
+
             ctx.new_window(
                 WindowDesc::new(build_screenshot_widget(index))
                     .title(WINDOW_TITLE)
@@ -607,11 +614,6 @@ fn build_root_widget() -> impl Widget<AppState> {
                     .set_window_state(WindowState::Maximized)
                     .set_position(monitor.virtual_rect().origin()),
             );
-
-            //println!("{:?}", data.screen);
-            //println!("{:?}", monitors);
-            //println!("{:?}", monitor);
-            //println!("{:?}", monitor.virtual_rect());
 
             ctx.submit_command(
                 SHOW_OVER_IMG
@@ -629,7 +631,8 @@ fn build_root_widget() -> impl Widget<AppState> {
                 data.custom_zstack_id = Some(*ZSTACK_ID);
                 data.screenshot_id = Some(*SCREENSHOT_WIDGET_ID);
                 ctx.submit_command(sys_cmd::HIDE_WINDOW.to(Auto));
-                let monitors = Screen::get_monitors();
+                let mut monitors = Screen::get_monitors();
+                monitors.sort_by_key(|monitor| !monitor.is_primary());
                 let index: usize =
                     std::str::FromStr::from_str(data.screen.trim_start_matches(".")).unwrap();
                 let monitor = monitors.get(index).unwrap();
@@ -798,7 +801,8 @@ fn build_root_widget() -> impl Widget<AppState> {
                         }),
                 )
             } else {
-                let screens = Screen::get_monitors();
+                let mut screens = Screen::get_monitors();
+                screens.sort_by_key(|monitor| !monitor.is_primary());
                 let dim = screens.len();
                 let number: u8 =
                     std::str::FromStr::from_str(selector.screen.trim_start_matches(".")).unwrap();

@@ -31,17 +31,9 @@ pub struct SelectedRect {
 impl SelectedRect {
     /// Construct SelectedRegion with coordinates set.
     pub fn new(monitor: usize) -> Self {
-        let primary_monitor_rect = Screen::get_monitors()
-            .get(monitor).expect("Can't find the selected monitor!")
-            .virtual_rect();
-
-        println!("monitor rect: {}", primary_monitor_rect);
-        println!("x0: {}", primary_monitor_rect.x0);
-        println!("y0: {}", primary_monitor_rect.y0);
-        println!("x1: {}", primary_monitor_rect.x1);
-        println!("y1: {}", primary_monitor_rect.y1);
-        println!("width: {}", primary_monitor_rect.width());
-        println!("height: {}\n", primary_monitor_rect.height());
+        let mut monitors = Screen::get_monitors();
+        monitors.sort_by_key(|monitor| !monitor.is_primary());
+        let primary_monitor_rect = monitors.get(monitor).expect("Can't find the selected monitor!").virtual_rect();
 
         Self {
             rect: Rect{
@@ -185,11 +177,15 @@ impl Widget<Rect> for SelectedRect {
             self.rect.y1 += 1.+BORDER_WIDTH;
             self.rect.y0 -= 1.+BORDER_WIDTH;
         }
+
         //Validity check: inside the monitor size
-        let primary_monitor_rect = Screen::get_monitors()
+        let mut monitors = Screen::get_monitors();
+        monitors.sort_by_key(|monitor| !monitor.is_primary());
+        let primary_monitor_rect = monitors
             //.into_iter().filter(|m|m.is_primary()).collect::<Vec<Monitor>>()
             .first().expect("No primary monitor found!")
             .virtual_rect();
+
         if self.rect.x0<primary_monitor_rect.x0{
             self.rect.x0 = primary_monitor_rect.x0;
         }

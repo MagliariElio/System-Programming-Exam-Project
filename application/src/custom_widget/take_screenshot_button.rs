@@ -282,13 +282,8 @@ impl<T: Data> Widget<T> for TakeScreenshotButton<T> {
 
 
 fn save_screenshot(rect: &Rect, base_path: Box<str>, file_name: Box<str>, format: ImageFormat, monitor: usize) -> DynamicImage{
-
     let screens = Screen::all().unwrap();
     let screen = screens.get(monitor).expect("Can't find the selected monitor!");
-    /*
-    let screen = Screen::from_point(rect.x0 as i32, rect.y0 as i32).unwrap();
-    println!("capturer {:?}",screen);
-    */
     let image = screen.capture_area(rect.x0 as i32, rect.y0 as i32, rect.width() as u32, rect.height() as u32).unwrap();
 
     let dyn_img = DynamicImage::from(
