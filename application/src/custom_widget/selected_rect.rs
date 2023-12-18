@@ -34,7 +34,6 @@ impl SelectedRect {
         let primary_monitor_rect = Screen::get_monitors()
             .get(monitor).expect("Can't find the selected monitor!")
             .virtual_rect();
-
         Self {
             rect: Rect{
                 x0 : primary_monitor_rect.x0+5.,
