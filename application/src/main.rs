@@ -3,7 +3,8 @@ mod custom_widget;
 use crate::custom_widget::{
     Alert, ColoredButton, CustomSlider, CustomZStack, OverImages, ScreenshotImage, SelectedRect,
     ShortcutKeys, StateShortcutKeys, TakeScreenshotButton, CREATE_ZSTACK, SAVE_OVER_IMG,
-    SAVE_SCREENSHOT, SHORTCUT_KEYS, SHOW_OVER_IMG, UPDATE_BACK_IMG, UPDATE_COLOR,
+    SAVE_SCREENSHOT, SHORTCUT_KEYS, SHOW_OVER_IMG, UPDATE_BACK_IMG, UPDATE_COLOR, UPDATE_RECT_SIZE,
+    UPDATE_SCREENSHOT_CROP,
 };
 use druid::commands::SHOW_ABOUT;
 use druid::keyboard_types::Code;
@@ -27,7 +28,6 @@ use std::path::Path;
 use std::sync::Arc;
 
 //TODO: Set the GUI error messages everywhere they need!
-//TODO: Make the main page GUI beautiful
 //TODO: Error handling.
 
 const STARTING_IMG_PATH: &'static str = "./src/images/starting_img.png";
@@ -80,6 +80,7 @@ struct AppState {
     #[data(ignore)]
     text_field_zstack: bool,
     text_field: String,
+    crop_screenshot_enabled: bool,
 }
 
 fn main() {
@@ -122,6 +123,7 @@ fn main() {
         },
         text_field_zstack: true,
         text_field: "".to_string(),
+        crop_screenshot_enabled: false,
     };
 
     let delegate = Delegate;
@@ -403,95 +405,7 @@ fn alert_widget() -> impl Widget<AppState> {
         .center();
     alert
 }
-fn edit_screenshot_widget(monitor: usize) -> impl Widget<AppState> {
-    let rectangle = LensWrap::new(SelectedRect::new(monitor), AppState::rect);
 
-    let edit_screenshot_button = TakeScreenshotButton::from_label(
-        Label::new("Edit Screenshot")
-            .with_text_color(Color::BLACK)
-            .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
-            .with_text_size(20.),
-    )
-    .with_color(Color::rgb8(70, 250, 70).with_alpha(1.))
-    .on_click(|ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
-        let (base_path, name) = file_name(data.name.clone(), data.base_path.clone());
-        data.alert
-            .show_alert("The new version of the image has been saved on the disk!"); // TODO: it should be moved after saving the image
-
-        data.shortcut_keys.state = StateShortcutKeys::NotBusy; // reset of shortcut state
-
-        ctx.submit_command(
-            SAVE_SCREENSHOT
-                .with((
-                    data.rect,
-                    data.main_window_id.expect("How did you open this window?"),
-                    data.custom_zstack_id
-                        .expect("How did you open this window?"),
-                    data.screenshot_id.expect("How did you open this window?"),
-                    base_path,
-                    name,
-                    image::ImageFormat::from_extension(data.extension.trim_start_matches("."))
-                        .unwrap(),
-                    data.delay as u64,
-                    std::str::FromStr::from_str(data.screen.trim_start_matches(".")).unwrap(),
-                ))
-                .to(Target::Widget(ctx.widget_id())),
-        );
-        data.state = State::ScreenTaken(ImageModified::NotSavable);
-    });
-
-    let delay_value = Label::dynamic(|data: &AppState, _env| data.delay.to_string())
-        .with_text_color(Color::WHITE)
-        .background(Color::BLACK.with_alpha(0.55));
-    let delay_stepper = Stepper::new()
-        .with_range(0.0, 20.0)
-        .with_step(1.0)
-        .with_wraparound(true)
-        .lens(AppState::delay);
-
-    let close_button = ColoredButton::from_label(
-        Label::new("Close")
-            .with_text_color(Color::BLACK)
-            .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
-            .with_text_size(20.),
-    )
-    .with_color(Color::rgb8(250, 70, 70).with_alpha(1.))
-    .on_click(|ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
-        let main_id = data.main_window_id.expect("How did you open this window?");
-
-        data.shortcut_keys.pressed_hot_keys = HashSet::new(); // clean map
-        data.shortcut_keys.state = StateShortcutKeys::NotBusy; // it has finished its job
-
-        data.state = State::Start;
-        ctx.get_external_handle()
-            .submit_command(sys_cmd::SHOW_WINDOW, (), main_id)
-            .expect("Error sending the event");
-        ctx.window().close();
-    });
-
-    let buttons_flex = Flex::row()
-        .with_child(edit_screenshot_button)
-        .with_default_spacer()
-        .with_child(delay_value)
-        .with_child(delay_stepper)
-        .with_default_spacer()
-        .with_child(close_button);
-
-    /*let label_container = Container::new(label)
-    .background(Color::BLACK.with_alpha(0.35));*/
-
-    let zstack = ZStack::new(rectangle)
-        //.with_child(label_container, Vec2::new(1.0, 1.0), Vec2::ZERO, UnitPoint::LEFT, Vec2::new(10.0, 0.0))
-        .with_child(
-            buttons_flex,
-            Vec2::new(1.0, 1.0),
-            Vec2::ZERO,
-            UnitPoint::BOTTOM_RIGHT,
-            Vec2::new(-100.0, -100.0),
-        );
-
-    zstack
-}
 fn build_screenshot_widget(monitor: usize) -> impl Widget<AppState> {
     let rectangle = LensWrap::new(SelectedRect::new(monitor), AppState::rect);
 
@@ -566,27 +480,29 @@ fn build_screenshot_widget(monitor: usize) -> impl Widget<AppState> {
         .with_default_spacer()
         .with_child(close_button);
 
-    /*let label_container = Container::new(label)
-    .background(Color::BLACK.with_alpha(0.35));*/
-
-    let zstack = ZStack::new(rectangle)
-        //.with_child(label_container, Vec2::new(1.0, 1.0), Vec2::ZERO, UnitPoint::LEFT, Vec2::new(10.0, 0.0))
-        .with_child(
-            buttons_flex,
-            Vec2::new(1.0, 1.0),
-            Vec2::ZERO,
-            UnitPoint::BOTTOM_RIGHT,
-            Vec2::new(-100.0, -100.0),
-        );
+    let zstack = ZStack::new(rectangle).with_child(
+        buttons_flex,
+        Vec2::new(1.0, 1.0),
+        Vec2::ZERO,
+        UnitPoint::BOTTOM_RIGHT,
+        Vec2::new(-100.0, -100.0),
+    );
 
     zstack
+}
+
+fn build_screenshot_crop_widget(monitor: usize) -> impl Widget<AppState> {
+    let rectangle = LensWrap::new(SelectedRect::new(monitor), AppState::rect);
+
+    Container::new(rectangle)
 }
 
 fn build_root_widget() -> impl Widget<AppState> {
     //let *SCREENSHOT_WIDGET_ID = WidgetId::next();
     //let zstack_id = WidgetId::next();
 
-    let take_screenshot_button =
+    let take_screenshot_button = Either::new(
+        |data: &AppState, _env| data.crop_screenshot_enabled == false,
         ColoredButton::from_label(Label::new(|data: &AppState, _env: &_| match data.state {
             State::Start => "Take Screenshot",
             State::ScreenTaken(_) => "New Screenshot",
@@ -600,9 +516,22 @@ fn build_root_widget() -> impl Widget<AppState> {
 
             let mut monitors = Screen::get_monitors();
             monitors.sort_by_key(|monitor| !monitor.is_primary());
-            let index: usize = std::str::FromStr::from_str(data.screen.trim_start_matches(".")).unwrap();
+            let index: usize =
+                std::str::FromStr::from_str(data.screen.trim_start_matches(".")).unwrap();
             monitors.sort_by_key(|monitor| !monitor.is_primary());
             let monitor = monitors.get(index).unwrap();
+
+            let primary_monitor_rect = monitors
+                .get(index)
+                .expect("Can't find the selected monitor!")
+                .virtual_rect();
+            let screen_img_rect = Rect {
+                x0: 0.,
+                y0: 0.,
+                x1: primary_monitor_rect.width() as f64,
+                y1: primary_monitor_rect.height() as f64,
+            };
+            ctx.submit_command(UPDATE_RECT_SIZE.with(screen_img_rect)); // reset of the rect
 
             ctx.new_window(
                 WindowDesc::new(build_screenshot_widget(index))
@@ -621,40 +550,10 @@ fn build_root_widget() -> impl Widget<AppState> {
                     .to(Target::Widget(data.custom_zstack_id.unwrap())),
             );
             data.state = State::ScreenTaken(ImageModified::NotSavable);
-        });
-    let edit_screenshot_button = Either::new(
-        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::NotSavable),
-        ColoredButton::from_label(Label::new("Edit ScreenShot"))
-            .with_color(Color::rgb(0., 0., 255.))
-            .on_click(move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
-                data.main_window_id = Some(ctx.window_id());
-                data.custom_zstack_id = Some(*ZSTACK_ID);
-                data.screenshot_id = Some(*SCREENSHOT_WIDGET_ID);
-                ctx.submit_command(sys_cmd::HIDE_WINDOW.to(Auto));
-                let mut monitors = Screen::get_monitors();
-                monitors.sort_by_key(|monitor| !monitor.is_primary());
-                let index: usize =
-                    std::str::FromStr::from_str(data.screen.trim_start_matches(".")).unwrap();
-                let monitor = monitors.get(index).unwrap();
-                ctx.new_window(
-                    WindowDesc::new(edit_screenshot_widget(index))
-                        .title(WINDOW_TITLE)
-                        .set_always_on_top(true)
-                        .transparent(true)
-                        .resizable(false)
-                        .show_titlebar(false)
-                        .set_window_state(WindowState::Maximized)
-                        .set_position(monitor.virtual_rect().origin()),
-                );
-                ctx.submit_command(
-                    SHOW_OVER_IMG
-                        .with((OverImages::Remove, None))
-                        .to(Target::Widget(data.custom_zstack_id.unwrap())),
-                );
-                data.state = State::ScreenTaken(ImageModified::NotSavable);
-            }),
+        }),
         Label::new(""),
     );
+
     let screenshot_image = IdentityWrapper::wrap(
         ScreenshotImage::new(ImageBuf::from_raw(
             Arc::<[u8]>::from(Vec::from([0, 0, 0, 0]).as_slice()),
@@ -685,7 +584,6 @@ fn build_root_widget() -> impl Widget<AppState> {
         }),
         *SCREENSHOT_WIDGET_ID,
     );
-
     let zstack = IdentityWrapper::wrap(
         CustomZStack::new(screenshot_image, *SCREENSHOT_WIDGET_ID),
         *ZSTACK_ID,
@@ -698,7 +596,149 @@ fn build_root_widget() -> impl Widget<AppState> {
         args.push("./src/images/icons/highlighter.png");
         ctx.submit_command(CREATE_ZSTACK.with(args).to(Target::Widget(*ZSTACK_ID)));
     });
-    let spaced_zstack = Container::new(zstack).padding((10.0, 0.0));
+
+    let screenshot_image_crop = IdentityWrapper::wrap(
+        ScreenshotImage::new(ImageBuf::from_raw(
+            Arc::<[u8]>::from(Vec::from([0, 0, 0, 0]).as_slice()),
+            ImageFormat::RgbaSeparate,
+            1usize,
+            1usize,
+        ))
+        .on_added(move |img, ctx, data: &AppState, _env| {
+            if Path::new(STARTING_IMG_PATH).exists() {
+                let screen_img = Arc::new(
+                    Reader::open(STARTING_IMG_PATH)
+                        .expect("Can't open the screenshot!")
+                        .decode()
+                        .expect("Can't decode the screenshot"),
+                );
+                img.set_image_data(ImageBuf::from_raw(
+                    Arc::<[u8]>::from(screen_img.as_bytes()),
+                    ImageFormat::RgbaSeparate,
+                    screen_img.width() as usize,
+                    screen_img.height() as usize,
+                ));
+                ctx.submit_command(
+                    UPDATE_BACK_IMG
+                        .with(screen_img)
+                        .to(Target::Widget(data.custom_zstack_id.unwrap())),
+                );
+            }
+        }),
+        *SCREENSHOT_WIDGET_ID,
+    );
+
+    let zstack_crop = IdentityWrapper::wrap(
+        CustomZStack::new(screenshot_image_crop, *SCREENSHOT_WIDGET_ID),
+        *ZSTACK_ID,
+    )
+    .on_added(move |_this, ctx, _data: &AppState, _env| {
+        let mut args = Vec::<&'static str>::new();
+        args.push("./src/images/icons/red-circle.png");
+        args.push("./src/images/icons/triangle.png");
+        args.push("./src/images/icons/red-arrow.png");
+        args.push("./src/images/icons/highlighter.png");
+        ctx.submit_command(CREATE_ZSTACK.with(args).to(Target::Widget(*ZSTACK_ID)));
+    });
+
+    let spaced_zstack = Either::new(
+        |data: &AppState, _env| data.crop_screenshot_enabled == true,
+        ZStack::new(zstack_crop)
+            .with_child(
+                build_screenshot_crop_widget(0), // TODO: trovare una soluzione per il monitor
+                Vec2::new(1.0, 1.0),
+                Vec2::ZERO,
+                UnitPoint::TOP_LEFT,
+                Vec2::new(0., 0.),
+            )
+            .padding((10.0, 10.0)),
+        Container::new(zstack).padding((10.0, 10.0)),
+    );
+
+    let crop_screenshot_button = TakeScreenshotButton::from_label(Label::new("Save"))
+        .with_color(Color::rgb8(0, 150, 0).with_alpha(1.))
+        .on_click(|ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
+            let (base_path, name) = file_name(data.name.clone(), data.base_path.clone());
+            data.name = (*name.clone()).to_string();
+
+            data.alert
+                .show_alert("The image has been saved on the disk!"); // TODO: it should be moved after saving the image
+
+            ctx.submit_command(
+                UPDATE_SCREENSHOT_CROP
+                    .with((
+                        data.rect,
+                        base_path,
+                        name,
+                        image::ImageFormat::from_extension(data.extension.trim_start_matches("."))
+                            .unwrap(),
+                        data.custom_zstack_id
+                            .expect("How did you open this window?"),
+                    ))
+                    .to(Target::Widget(*SCREENSHOT_WIDGET_ID)),
+            );
+
+            data.crop_screenshot_enabled = false;
+
+            data.shortcut_keys.state = StateShortcutKeys::NotBusy; // reset of shortcut state
+
+            data.state = State::ScreenTaken(ImageModified::NotSavable);
+        });
+
+    let close_crop_screenshop_button = ColoredButton::from_label(Label::new("Close"))
+        .with_color(Color::rgb8(150, 0, 0).with_alpha(1.))
+        .on_click(|ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
+            data.crop_screenshot_enabled = false; // disable the crop screenshot widget
+
+            let mut monitors = Screen::get_monitors();
+            monitors.sort_by_key(|monitor| !monitor.is_primary());
+            let index: usize =
+                std::str::FromStr::from_str(data.screen.trim_start_matches(".")).unwrap();
+            monitors.sort_by_key(|monitor| !monitor.is_primary());
+
+            let primary_monitor_rect = monitors
+                .get(index)
+                .expect("Can't find the selected monitor!")
+                .virtual_rect();
+            let screen_img_rect = Rect {
+                x0: 0.,
+                y0: 0.,
+                x1: primary_monitor_rect.width() as f64,
+                y1: primary_monitor_rect.height() as f64,
+            };
+            ctx.submit_command(UPDATE_RECT_SIZE.with(screen_img_rect)); // reset of the rect
+
+            data.shortcut_keys.pressed_hot_keys = HashSet::new(); // clean map
+            data.shortcut_keys.state = StateShortcutKeys::NotBusy; // it has finished its job
+        });
+
+    let buttons_crop_screenshot_flex = Flex::row()
+        .with_child(
+            Label::new("Crop Screenshot:  ")
+                .with_text_color(Color::BLACK)
+                .padding(2.)
+        )
+        .with_child(crop_screenshot_button)
+        .with_default_spacer()
+        .with_child(close_crop_screenshop_button);
+
+    let crop_screenshot_button = Either::new(
+        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::NotSavable),
+        Either::new(
+            |data: &AppState, _env| data.crop_screenshot_enabled == false,
+            ColoredButton::from_label(Label::new("Crop ScreenShot"))
+                .with_color(Color::rgb(0., 0., 255.))
+                .on_click(move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
+                    data.main_window_id = Some(ctx.window_id());
+                    data.custom_zstack_id = Some(*ZSTACK_ID);
+                    data.screenshot_id = Some(*SCREENSHOT_WIDGET_ID);
+
+                    data.crop_screenshot_enabled = true;
+                }),
+            buttons_crop_screenshot_flex,
+        ),
+        Label::new(""),
+    );
 
     let name_selector = Either::new(
         |data: &AppState, _env| {
@@ -788,47 +828,55 @@ fn build_root_widget() -> impl Widget<AppState> {
         Label::new(""),
     );
 
-    let screen_selector = ViewSwitcher::new(
-        |data: &AppState, _env| data.clone(),
-        |selector, data: &AppState, _env| {
-            if selector.screen.chars().all(char::is_numeric) {
-                Box::new(
-                    Label::new(format!("{} ▼", data.screen.parse::<i32>().unwrap_or(0) + 1))
-                        .with_text_color(Color::BLACK)
-                        .border(Color::BLACK, 2.)
-                        .on_click(|_, data: &mut AppState, _| {
-                            data.screen = format!(".{}", data.screen)
-                        }),
-                )
-            } else {
-                let mut screens = Screen::get_monitors();
-                screens.sort_by_key(|monitor| !monitor.is_primary());
-                let dim = screens.len();
-                let number: u8 =
-                    std::str::FromStr::from_str(selector.screen.trim_start_matches(".")).unwrap();
-                let mut flex = Flex::column();
-                for i in 0..dim {
-                    let color = if i == number as usize {
-                        Color::BLACK.with_alpha(1.)
-                    } else {
-                        Color::BLACK.with_alpha(0.4)
-                    };
-                    flex.add_child(
-                        Label::new(format!("{} ◀", i + 1))
-                            .with_text_color(color)
-                            .border(color, 2.)
-                            .on_click(move |_, data: &mut AppState, _| {
-                                data.screen = format!("{}", i)
+    let screen_selector = Either::new(
+        |data: &AppState, _env| data.crop_screenshot_enabled == false,
+        ViewSwitcher::new(
+            |data: &AppState, _env| data.clone(),
+            |selector, data: &AppState, _env| {
+                if selector.screen.chars().all(char::is_numeric) {
+                    Box::new(
+                        Label::new(format!("{} ▼", data.screen.parse::<i32>().unwrap_or(0) + 1))
+                            .with_text_color(Color::BLACK)
+                            .border(Color::BLACK, 2.)
+                            .on_click(|_, data: &mut AppState, _| {
+                                data.screen = format!(".{}", data.screen)
                             }),
-                    );
+                    )
+                } else {
+                    let mut screens = Screen::get_monitors();
+                    screens.sort_by_key(|monitor| !monitor.is_primary());
+                    let dim = screens.len();
+                    let number: u8 =
+                        std::str::FromStr::from_str(selector.screen.trim_start_matches("."))
+                            .unwrap();
+                    let mut flex = Flex::column();
+                    for i in 0..dim {
+                        let color = if i == number as usize {
+                            Color::BLACK.with_alpha(1.)
+                        } else {
+                            Color::BLACK.with_alpha(0.4)
+                        };
+                        flex.add_child(
+                            Label::new(format!("{} ◀", i + 1))
+                                .with_text_color(color)
+                                .border(color, 2.)
+                                .on_click(move |_, data: &mut AppState, _| {
+                                    data.screen = format!("{}", i)
+                                }),
+                        );
+                    }
+                    Box::new(Scroll::new(flex).border(Color::BLACK.with_alpha(0.6), 4.))
                 }
-                Box::new(Scroll::new(flex).border(Color::BLACK.with_alpha(0.6), 4.))
-            }
-        },
+            },
+        ),
+        Label::new(""),
     );
 
     let circle_button = Either::new(
-        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::NotSavable),
+        |data: &AppState, _env| {
+            data.state == State::ScreenTaken(ImageModified::NotSavable)
+                && data.crop_screenshot_enabled == false
+        },
         Button::from_label(Label::new("⭕")).on_click(
             move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
                 ctx.submit_command(
@@ -843,7 +891,10 @@ fn build_root_widget() -> impl Widget<AppState> {
     );
 
     let triangle_button = Either::new(
-        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::NotSavable),
+        |data: &AppState, _env| {
+            data.state == State::ScreenTaken(ImageModified::NotSavable)
+                && data.crop_screenshot_enabled == false
+        },
         Button::from_label(Label::new("△")).on_click(
             move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
                 ctx.submit_command(
@@ -857,7 +908,10 @@ fn build_root_widget() -> impl Widget<AppState> {
         Label::new(""),
     );
     let arrow_button = Either::new(
-        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::NotSavable),
+        |data: &AppState, _env| {
+            data.state == State::ScreenTaken(ImageModified::NotSavable)
+                && data.crop_screenshot_enabled == false
+        },
         Button::from_label(Label::new("→")).on_click(
             move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
                 ctx.submit_command(
@@ -871,7 +925,10 @@ fn build_root_widget() -> impl Widget<AppState> {
         Label::new(""),
     );
     let highlighter_button = Either::new(
-        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::NotSavable),
+        |data: &AppState, _env| {
+            data.state == State::ScreenTaken(ImageModified::NotSavable)
+                && data.crop_screenshot_enabled == false
+        },
         Button::from_label(Label::new("⎚")).on_click(
             move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
                 ctx.submit_command(
@@ -889,6 +946,7 @@ fn build_root_widget() -> impl Widget<AppState> {
         |data: &AppState, _| {
             data.text_field_zstack == true
                 && data.state == State::ScreenTaken(ImageModified::NotSavable)
+                && data.crop_screenshot_enabled == false
         },
         Flex::row()
             .with_child(
@@ -927,7 +985,10 @@ fn build_root_widget() -> impl Widget<AppState> {
     );
 
     let text_button = Either::new(
-        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::NotSavable),
+        |data: &AppState, _env| {
+            data.state == State::ScreenTaken(ImageModified::NotSavable)
+                && data.crop_screenshot_enabled == false
+        },
         Button::from_label(Label::new("Text")).on_click(
             move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
                 data.text_field_zstack = true;
@@ -938,7 +999,10 @@ fn build_root_widget() -> impl Widget<AppState> {
     );
 
     let colors_button = Either::new(
-        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::NotSavable),
+        |data: &AppState, _env| {
+            data.state == State::ScreenTaken(ImageModified::NotSavable)
+                && data.crop_screenshot_enabled == false
+        },
         ColoredButton::from_label(Label::new("Color"))
             .with_color(Color::PURPLE)
             .on_click(move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
@@ -971,7 +1035,10 @@ fn build_root_widget() -> impl Widget<AppState> {
     );
 
     let remove_over_img = Either::new(
-        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::Savable),
+        |data: &AppState, _env| {
+            data.state == State::ScreenTaken(ImageModified::Savable)
+                && data.crop_screenshot_enabled == false
+        },
         Button::from_label(Label::new("❌")).on_click(
             move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
                 ctx.submit_command(
@@ -1080,11 +1147,15 @@ fn build_root_widget() -> impl Widget<AppState> {
         .with_default_spacer()
         .with_child(save_button)
         .with_default_spacer()
-        .with_child(Container::new(edit_screenshot_button))
+        .with_child(Container::new(crop_screenshot_button))
         .with_default_spacer()
         .with_flex_child(Container::new(take_screenshot_button), 1.0)
         .with_default_spacer()
-        .with_child(Label::new("Select Screen:").with_text_color(Color::BLACK.with_alpha(0.85)))
+        .with_child(Either::new(
+            |data: &AppState, _env| data.crop_screenshot_enabled == false,
+            Label::new("Select Screen:").with_text_color(Color::BLACK.with_alpha(0.85)),
+            Label::new(""),
+        ))
         .with_default_spacer()
         .with_child(screen_selector);
     //.with_child(ShortcutKeys {favorite_hot_keys: HashSet::new(), pressed_hot_keys: HashSet::new(), state: NotBusy});

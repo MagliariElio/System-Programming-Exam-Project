@@ -10,9 +10,9 @@ mod alert;
 mod shortcut_keys;
 
 pub use colored_button::ColoredButton;
-pub use selected_rect::SelectedRect;
+pub use selected_rect::{SelectedRect,UPDATE_RECT_SIZE};
 pub use custom_zstack::{CustomZStack,OverImages,CREATE_ZSTACK,SAVE_OVER_IMG,SHOW_OVER_IMG,UPDATE_COLOR,UPDATE_BACK_IMG};
-pub use screenshot_image::{ScreenshotImage,UPDATE_SCREENSHOT};
+pub use screenshot_image::{ScreenshotImage,UPDATE_SCREENSHOT, UPDATE_SCREENSHOT_CROP};
 pub use take_screenshot_button::{TakeScreenshotButton,SAVE_SCREENSHOT};
 pub use resizable_box::{ResizableBox,UPDATE_ORIGIN};
 pub use custom_slider::CustomSlider;
