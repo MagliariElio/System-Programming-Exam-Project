@@ -465,7 +465,7 @@ fn build_screenshot_widget(monitor: usize) -> impl Widget<AppState> {
         data.shortcut_keys.pressed_hot_keys = HashSet::new(); // clean map
         data.shortcut_keys.state = StateShortcutKeys::NotBusy; // it has finished its job
 
-        data.state = State::Start;
+        //data.state = State::Start;
         ctx.get_external_handle()
             .submit_command(sys_cmd::SHOW_WINDOW, (), main_id)
             .expect("Error sending the event");
@@ -549,7 +549,7 @@ fn build_root_widget() -> impl Widget<AppState> {
                     .with((OverImages::Remove, None))
                     .to(Target::Widget(data.custom_zstack_id.unwrap())),
             );
-            data.state = State::ScreenTaken(ImageModified::NotSavable);
+            //data.state = State::ScreenTaken(ImageModified::NotSavable);
         }),
         Label::new(""),
     );
