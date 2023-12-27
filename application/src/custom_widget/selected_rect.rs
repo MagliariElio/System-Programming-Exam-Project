@@ -1,11 +1,13 @@
-use tracing::{instrument};
-use druid::widget::prelude::*;
-use druid::{Cursor, MouseEvent, Point, Rect, Screen, theme};
 use druid::piet::{LineJoin, StrokeStyle};
+use druid::widget::prelude::*;
+use druid::{theme, Cursor, MouseEvent, Point, Rect, Screen, Selector};
+use tracing::instrument;
 
 ///the distance in pixels from the SelectedRegion borders where a click is relevated
-const DISTANCE_MARGIN:f64 = 10.0;
-const BORDER_WIDTH:f64 = 5.;
+const DISTANCE_MARGIN: f64 = 10.0;
+const BORDER_WIDTH: f64 = 5.;
+
+pub const UPDATE_RECT_SIZE: Selector<Rect> = Selector::new("Update the rect size");
 
 #[derive(Copy, Clone, PartialEq)]
 enum IfMousePressedWhere {
@@ -18,7 +20,7 @@ enum IfMousePressedWhere {
     West,
     NorthWest,
     Inside(Point),
-    NotInterested
+    NotInterested,
 }
 
 #[derive(Clone)]
@@ -31,66 +33,91 @@ pub struct SelectedRect {
 impl SelectedRect {
     /// Construct SelectedRegion with coordinates set.
     pub fn new(monitor: usize) -> Self {
-        let primary_monitor_rect = Screen::get_monitors()
-            .get(monitor).expect("Can't find the selected monitor!")
+        let mut monitors = Screen::get_monitors();
+        monitors.sort_by_key(|monitor| !monitor.is_primary());
+        let primary_monitor_rect = monitors
+            .get(monitor)
+            .expect("Can't find the selected monitor!")
             .virtual_rect();
         Self {
-            rect: Rect{
-                x0 : primary_monitor_rect.x0+5.,
-                y0 : primary_monitor_rect.y0+5.,
-                x1 : primary_monitor_rect.x1-5.,
-                y1 : primary_monitor_rect.y1-5.,
+            rect: Rect {
+                x0: 5.,
+                y0: 5.,
+                x1: primary_monitor_rect.width() - 5.,
+                y1: primary_monitor_rect.height() - 5.,
             },
             mouse: IfMousePressedWhere::NotInterested,
             show_overlay: false,
         }
     }
 
-    fn where_mouse_is(self: &Self, me:&MouseEvent) -> IfMousePressedWhere{
+    fn where_mouse_is(self: &Self, me: &MouseEvent) -> IfMousePressedWhere {
         let pos = me.pos;
         let x0 = self.rect.x0;
         let x1 = self.rect.x1;
         let y0 = self.rect.y0;
         let y1 = self.rect.y1;
         return if f64::abs(pos.x - x0) < DISTANCE_MARGIN {
-            if f64::abs(pos.y - y0) < DISTANCE_MARGIN{
+            if f64::abs(pos.y - y0) < DISTANCE_MARGIN {
                 IfMousePressedWhere::NorthWest
-            } else if f64::abs(pos.y - y1) < DISTANCE_MARGIN{
+            } else if f64::abs(pos.y - y1) < DISTANCE_MARGIN {
                 IfMousePressedWhere::SouthWest
             } else {
                 IfMousePressedWhere::West
             }
         } else if f64::abs(pos.x - x1) < DISTANCE_MARGIN {
-            if f64::abs(pos.y - y0) < DISTANCE_MARGIN{
+            if f64::abs(pos.y - y0) < DISTANCE_MARGIN {
                 IfMousePressedWhere::NorthEst
-            } else if f64::abs(pos.y - y1) < DISTANCE_MARGIN{
+            } else if f64::abs(pos.y - y1) < DISTANCE_MARGIN {
                 IfMousePressedWhere::SouthEst
             } else {
                 IfMousePressedWhere::Est
             }
-        } else if f64::abs(pos.y - y0) < DISTANCE_MARGIN{
+        } else if f64::abs(pos.y - y0) < DISTANCE_MARGIN {
             IfMousePressedWhere::North
-        } else if f64::abs(pos.y - y1) < DISTANCE_MARGIN{
+        } else if f64::abs(pos.y - y1) < DISTANCE_MARGIN {
             IfMousePressedWhere::South
-        } else if pos.y > y0 && pos.y < y1 && pos.x > x0 && pos.x < x1{
+        } else if pos.y > y0 && pos.y < y1 && pos.x > x0 && pos.x < x1 {
             IfMousePressedWhere::Inside(pos)
         } else {
             IfMousePressedWhere::NotInterested
-        }
+        };
+    }
+
+    pub fn reset_rect(&mut self, rect: &Rect) {
+        self.rect = Rect {
+            x0: 0.,
+            y0: 0.,
+            x1: rect.width(),
+            y1: rect.height(),
+        };
+        self.mouse =  IfMousePressedWhere::NotInterested;
+        self.show_overlay = false;
     }
 }
 
 impl Widget<Rect> for SelectedRect {
-    #[instrument(name = "SelectedRegion", level = "trace", skip(self, ctx, event, data, _env))]
+    #[instrument(
+        name = "SelectedRegion",
+        level = "trace",
+        skip(self, ctx, event, data, _env)
+    )]
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut Rect, _env: &Env) {
         match event {
+            Event::Command(cmd) if cmd.is(UPDATE_RECT_SIZE) => {
+                println!("Command chiamato");
+                let rect = cmd.get_unchecked(UPDATE_RECT_SIZE);
+                self.reset_rect(rect);
+                ctx.set_handled();
+            }
             Event::MouseDown(me) => {
                 ctx.set_active(true);
                 self.mouse = self.where_mouse_is(me);
                 self.show_overlay = true;
             }
             Event::MouseMove(me) => {
-                if self.mouse != IfMousePressedWhere::NotInterested{ //if the mouse has been pressed
+                if self.mouse != IfMousePressedWhere::NotInterested {
+                    //if the mouse has been pressed
                     let pos = me.pos;
                     match self.mouse {
                         IfMousePressedWhere::NotInterested => (),
@@ -119,7 +146,8 @@ impl Widget<Rect> for SelectedRect {
                             self.rect.x0 = pos.x;
                         }
                         IfMousePressedWhere::NorthWest => {
-                            self.rect.y0 = pos.y; self.rect.x0 = pos.x;
+                            self.rect.y0 = pos.y;
+                            self.rect.x0 = pos.x;
                         }
                         IfMousePressedWhere::Inside(old_pos) => {
                             self.rect.y0 += pos.y - old_pos.y;
@@ -130,7 +158,8 @@ impl Widget<Rect> for SelectedRect {
                             self.show_overlay = true;
                         }
                     }
-                } else { //the mouse has not been pressed
+                } else {
+                    //the mouse has not been pressed
                     match self.where_mouse_is(me) {
                         IfMousePressedWhere::North => {
                             ctx.override_cursor(&Cursor::ResizeUpDown);
@@ -156,11 +185,11 @@ impl Widget<Rect> for SelectedRect {
                         IfMousePressedWhere::NorthWest => {
                             ctx.override_cursor(&Cursor::Crosshair);
                         }
-                        _ => ctx.clear_cursor()
+                        _ => ctx.clear_cursor(),
                     }
                 }
             }
-            Event::MouseUp(_)=>{
+            Event::MouseUp(_) => {
                 self.mouse = IfMousePressedWhere::NotInterested;
                 ctx.set_active(false);
                 self.show_overlay = false;
@@ -168,60 +197,83 @@ impl Widget<Rect> for SelectedRect {
             _ => (),
         }
         //Keeps validity
-        while self.rect.x1<=self.rect.x0+BORDER_WIDTH{
-            self.rect.x1 += 1.+BORDER_WIDTH;
-            self.rect.x0 -= 1.+BORDER_WIDTH;
+        while self.rect.x1 <= self.rect.x0 + BORDER_WIDTH {
+            self.rect.x1 += 1. + BORDER_WIDTH;
+            self.rect.x0 -= 1. + BORDER_WIDTH;
         }
-        while self.rect.y1<=self.rect.y0+BORDER_WIDTH{
-            self.rect.y1 += 1.+BORDER_WIDTH;
-            self.rect.y0 -= 1.+BORDER_WIDTH;
+        while self.rect.y1 <= self.rect.y0 + BORDER_WIDTH {
+            self.rect.y1 += 1. + BORDER_WIDTH;
+            self.rect.y0 -= 1. + BORDER_WIDTH;
         }
+
         //Validity check: inside the monitor size
-        let primary_monitor_rect = Screen::get_monitors()
+        let mut monitors = Screen::get_monitors();
+        monitors.sort_by_key(|monitor| !monitor.is_primary());
+        let primary_monitor_rect = monitors
             //.into_iter().filter(|m|m.is_primary()).collect::<Vec<Monitor>>()
-            .first().expect("No primary monitor found!")
+            .first()
+            .expect("No primary monitor found!")
             .virtual_rect();
-        if self.rect.x0<primary_monitor_rect.x0{
+
+        if self.rect.x0 < primary_monitor_rect.x0 {
             self.rect.x0 = primary_monitor_rect.x0;
         }
-        if self.rect.y0<primary_monitor_rect.y0{
+        if self.rect.y0 < primary_monitor_rect.y0 {
             self.rect.y0 = primary_monitor_rect.y0;
         }
-        if self.rect.x1>primary_monitor_rect.x1{
-            self.rect.x1 = primary_monitor_rect.x1-BORDER_WIDTH;
+        if self.rect.x1 > primary_monitor_rect.x1 {
+            self.rect.x1 = primary_monitor_rect.x1 - BORDER_WIDTH;
         }
-        if self.rect.y1>primary_monitor_rect.y1{
-            self.rect.y1 = primary_monitor_rect.y1-BORDER_WIDTH;
+        if self.rect.y1 > primary_monitor_rect.y1 {
+            self.rect.y1 = primary_monitor_rect.y1 - BORDER_WIDTH;
         }
-        *data=self.rect;
+        *data = self.rect;
     }
 
-    #[instrument(name = "SelectedRegion", level = "trace", skip(self, ctx, event, _data, _env))]
+    #[instrument(
+        name = "SelectedRegion",
+        level = "trace",
+        skip(self, ctx, event, _data, _env)
+    )]
     fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, _data: &Rect, _env: &Env) {
-        if let LifeCycle::HotChanged(_) | LifeCycle::DisabledChanged(_) | LifeCycle::ViewContextChanged(_) | LifeCycle::FocusChanged(_) = event {
+        if let LifeCycle::HotChanged(_)
+        | LifeCycle::DisabledChanged(_)
+        | LifeCycle::ViewContextChanged(_)
+        | LifeCycle::FocusChanged(_) = event
+        {
             ctx.request_paint();
         }
     }
 
     #[instrument(
-    name = "SelectedRegion",
-    level = "trace",
-    skip(self, ctx, _old_data, _data, _env)
+        name = "SelectedRegion",
+        level = "trace",
+        skip(self, ctx, _old_data, _data, _env)
     )]
     fn update(&mut self, ctx: &mut UpdateCtx, _old_data: &Rect, _data: &Rect, _env: &Env) {
         ctx.request_paint();
     }
 
-    #[instrument(name = "SelectedRegion", level = "trace", skip(self, _ctx, bc, _data, _env))]
-    fn layout(&mut self, _ctx: &mut LayoutCtx, bc: &BoxConstraints, _data: &Rect, _env: &Env) -> Size {
+    #[instrument(
+        name = "SelectedRegion",
+        level = "trace",
+        skip(self, _ctx, bc, _data, _env)
+    )]
+    fn layout(
+        &mut self,
+        _ctx: &mut LayoutCtx,
+        bc: &BoxConstraints,
+        _data: &Rect,
+        _env: &Env,
+    ) -> Size {
         bc.debug_check("SelectedRegion");
         let overlay_padding = if self.show_overlay { 0.0 } else { BORDER_WIDTH };
-        bc.constrain(Size::new(
+        let size = Size::new(
             self.rect.x1 - self.rect.x0 + overlay_padding * 2.0,
             self.rect.y1 - self.rect.y0 + overlay_padding * 2.0,
-        ))
+        );
+        bc.constrain(size)
     }
-
 
     #[instrument(name = "SelectedRegion", level = "trace", skip(self, ctx, env))]
     fn paint(&mut self, ctx: &mut PaintCtx, data: &Rect, env: &Env) {
@@ -249,6 +301,4 @@ impl Widget<Rect> for SelectedRect {
             .dash_offset(0.0);
         ctx.stroke_styled(rect, &border_color, BORDER_WIDTH, &style);
     }
-
-
 }
