@@ -105,7 +105,6 @@ impl Widget<Rect> for SelectedRect {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut Rect, _env: &Env) {
         match event {
             Event::Command(cmd) if cmd.is(UPDATE_RECT_SIZE) => {
-                println!("Command chiamato");
                 let rect = cmd.get_unchecked(UPDATE_RECT_SIZE);
                 self.reset_rect(rect);
                 ctx.set_handled();

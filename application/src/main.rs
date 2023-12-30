@@ -24,7 +24,6 @@ use druid::{
 use image::io::Reader;
 use random_string::generate;
 use std::collections::HashSet;
-use std::io::BufReader;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -405,129 +404,6 @@ fn alert_widget() -> impl Widget<AppState> {
         .fix_height(40.0)
         .center();
     alert
-}
-fn crop_screenshot_widget(monitor: usize) -> impl Widget<AppState>{
-    //let spaced_zstack = Container::new(zstack);//.padding((10.0, 0.0));
-    let screenshot_image = IdentityWrapper::wrap(
-        ScreenshotImage::new(ImageBuf::from_raw(
-            Arc::<[u8]>::from(Vec::from([0, 0, 0, 0]).as_slice()),
-            ImageFormat::RgbaSeparate,
-            1usize,
-            1usize,
-        ))
-        .on_added(move |img, ctx, data: &AppState, _env| {
-            if Path::new(STARTING_IMG_PATH).exists() {
-                let screen_img = Arc::new(
-                    Reader::open(STARTING_IMG_PATH)
-                        .expect("Can't open the screenshot!")
-                        .decode()
-                        .expect("Can't decode the screenshot"),
-                );
-                img.set_image_data(ImageBuf::from_raw(
-                    Arc::<[u8]>::from(screen_img.as_bytes()),
-                    ImageFormat::RgbaSeparate,
-                    screen_img.width() as usize,
-                    screen_img.height() as usize,
-                ));
-                ctx.submit_command(
-                    UPDATE_BACK_IMG
-                        .with(screen_img)
-                        .to(Target::Widget(data.custom_zstack_id.unwrap())),
-                );
-            }
-        }),
-        *SCREENSHOT_WIDGET_ID,
-    );
-
-    let zstack = IdentityWrapper::wrap(
-        CustomZStack::new(screenshot_image, *SCREENSHOT_WIDGET_ID),
-        *ZSTACK_ID,
-    );
-
-    let rectangle = LensWrap::new(SelectedRect::new(monitor), AppState::rect);
-
-    let crop_screenshot_button = TakeScreenshotButton::from_label(
-        Label::new("Crop Screenshot")
-            .with_text_color(Color::BLACK)
-            .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
-            .with_text_size(20.),
-    )
-    .with_color(Color::rgb8(70, 250, 70).with_alpha(1.))
-    .on_click(|ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
-        let (base_path, name) = file_name(data.name.clone(), data.base_path.clone());
-        data.alert
-            .show_alert("The cropped version of the image has been saved on the disk!"); // TODO: it should be moved after saving the image
-
-        ctx.submit_command(
-            SAVE_SCREENSHOT
-                .with((
-                    data.rect,
-                    data.main_window_id.expect("How did you open this window?"),
-                    data.custom_zstack_id
-                        .expect("How did you open this window?"),
-                    data.screenshot_id.expect("How did you open this window?"),
-                    base_path,
-                    name,
-                    image::ImageFormat::from_extension(data.extension.trim_start_matches("."))
-                        .unwrap(),
-                    data.delay as u64,
-                    std::str::FromStr::from_str(data.screen.trim_start_matches(".")).unwrap(),
-                ))
-                .to(Target::Widget(ctx.widget_id())),
-        );
-    });
-
-    let delay_value = Label::dynamic(|data: &AppState, _env| data.delay.to_string())
-        .with_text_color(Color::WHITE)
-        .background(Color::BLACK.with_alpha(0.55));
-    let delay_stepper = Stepper::new()
-        .with_range(0.0, 20.0)
-        .with_step(1.0)
-        .with_wraparound(true)
-        .lens(AppState::delay);
-
-    let close_button = ColoredButton::from_label(
-        Label::new("Close")
-            .with_text_color(Color::BLACK)
-            .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
-            .with_text_size(20.),
-    )
-    .with_color(Color::rgb8(250, 70, 70).with_alpha(1.))
-    .on_click(|ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
-        let main_id = data.main_window_id.expect("How did you open this window?");
-
-        data.shortcut_keys.pressed_hot_keys = HashSet::new(); // clean map
-        data.shortcut_keys.state = StateShortcutKeys::NotBusy; // it has finished its job
-
-        data.state = State::Start;
-        ctx.get_external_handle()
-            .submit_command(sys_cmd::SHOW_WINDOW, (), main_id)
-            .expect("Error sending the event");
-        ctx.window().close();
-    });
-
-    let buttons_flex = Flex::row()
-        .with_child(crop_screenshot_button)
-        .with_default_spacer()
-        .with_child(delay_value)
-        .with_child(delay_stepper)
-        .with_default_spacer()
-        .with_child(close_button);
-
-    /*let label_container = Container::new(label)
-    .background(Color::BLACK.with_alpha(0.35));*/
-
-    let zstack = ZStack::new(rectangle)
-        //.with_child(label_container, Vec2::new(1.0, 1.0), Vec2::ZERO, UnitPoint::LEFT, Vec2::new(10.0, 0.0))
-        .with_child(
-            buttons_flex,
-            Vec2::new(1.0, 1.0),
-            Vec2::ZERO,
-            UnitPoint::BOTTOM_RIGHT,
-            Vec2::new(-100.0, -100.0),
-        );
-
-    zstack
 }
 fn build_screenshot_widget(monitor: usize) -> impl Widget<AppState> {
     let rectangle = LensWrap::new(SelectedRect::new(monitor), AppState::rect);

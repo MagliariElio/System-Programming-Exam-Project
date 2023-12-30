@@ -145,17 +145,10 @@ impl<T: Data> Widget<T> for ScreenshotImage {
                         x1: screen_img.width() as f64,
                         y1: screen_img.height() as f64
                     };
+                    println!("{}",screen_img.width());
+                    println!("{}",screen_img.height());
                     ctx.submit_command(UPDATE_RECT_SIZE.with(screen_img_rect)); // reset of the rect
 
-                    println!("rect: width {:?} height {:?}", rect_crop.width(), rect_crop.height());
-                    println!("rect: width {:?} height {:?}", rect_crop.width() as u32, rect_crop.height() as u32);
-                    println!("img: width {:?} height {:?}", screen_img.width(), screen_img.height());
-
-                    // it checks if the rect is inside the size of the image
-                    if rect_crop.width() as u32 >= (*screen_img).width() || rect_crop.height() as u32 >= (*screen_img).height() {
-                        println!("uscito");
-                        return;
-                    }
 
                     let img_resized = (*screen_img).clone().crop(rect_crop.x0 as u32, rect_crop.y0 as u32, rect_crop.x1 as u32, rect_crop.y1 as u32);
 
@@ -173,9 +166,8 @@ impl<T: Data> Widget<T> for ScreenshotImage {
                     self.set_image_data_arc(img.clone());
 
                     ctx.get_external_handle()
-                        .submit_command(UPDATE_BACK_IMG, img, *custom_zstack_id)
+                        .submit_command(UPDATE_BACK_IMG,img,*custom_zstack_id)
                         .expect("Error sending the event to the screenshot widget");
-
                     ctx.request_layout();
                     ctx.request_paint();
                 }
