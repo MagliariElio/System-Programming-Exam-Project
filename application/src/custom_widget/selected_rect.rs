@@ -41,8 +41,8 @@ impl SelectedRect {
             .virtual_rect();
         Self {
             rect: Rect {
-                x0: 5.,
-                y0: 5.,
+                x0: 2.,
+                y0: 2.,
                 x1: primary_monitor_rect.width() - 5.,
                 y1: primary_monitor_rect.height() - 5.,
             },
