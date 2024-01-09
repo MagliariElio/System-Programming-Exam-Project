@@ -148,7 +148,6 @@ impl<T: Data> CustomZStack<T> {
                     over_images_cloned.push(image_modified.clone());
                 }
 
-                //self.over_images = Some(over_images_cloned);
                 image = Some(image_modified);
             } else {
                 image = Some(
@@ -170,7 +169,7 @@ impl<T: Data> CustomZStack<T> {
                     img.width() as usize,
                     img.height() as usize,
                 )),
-                id,
+                id
             )
             .height(50.)
             .width(50.);
