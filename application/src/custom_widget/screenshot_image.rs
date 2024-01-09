@@ -8,6 +8,7 @@ use crate::custom_widget::{UPDATE_BACK_IMG, UPDATE_RECT_SIZE};
 
 pub const UPDATE_SCREENSHOT: Selector<Arc<DynamicImage>> = Selector::new("Update the screenshot image");
 pub const UPDATE_SCREENSHOT_CROP: Selector<(Rect, Box<str>, Box<str>, image::ImageFormat, WidgetId)> = Selector::new("Update the screenshot image cropped");
+pub const UPDATE_SCREENSHOT_CROP_CLOSE: Selector<> = Selector::new("Update the rect size after closing");
 
 pub struct ScreenshotImage {
     image_data: ImageBuf,
@@ -116,6 +117,11 @@ impl ScreenshotImage {
         self.image_data_arc = Some(image_data_arc);
         self.invalidate();
     }
+
+    #[inline]
+    fn image_data(&self) -> ImageBuf {
+        self.image_data.clone()
+    }
 }
 
 impl<T: Data> Widget<T> for ScreenshotImage {
@@ -132,25 +138,49 @@ impl<T: Data> Widget<T> for ScreenshotImage {
                         screen_img.width() as usize,
                         screen_img.height() as usize,
                     ));
-                    ctx.request_layout();
-                    ctx.request_paint();
-                }
-                if cmd.is(UPDATE_SCREENSHOT_CROP) {
-                    let (rect_crop, path,file_name,file_format, custom_zstack_id) = cmd.get_unchecked(UPDATE_SCREENSHOT_CROP);
 
-                    let screen_img = self.image_data_arc.clone().unwrap();
                     let screen_img_rect = Rect {
                         x0: 0.,
                         y0: 0.,
                         x1: screen_img.width() as f64,
                         y1: screen_img.height() as f64
                     };
-                    println!("{}",screen_img.width());
-                    println!("{}",screen_img.height());
                     ctx.submit_command(UPDATE_RECT_SIZE.with(screen_img_rect)); // reset of the rect
 
+                    ctx.request_layout();
+                    ctx.request_paint();
+                }
+                if cmd.is(UPDATE_SCREENSHOT_CROP) {
+                    let (rect_crop, path,file_name,file_format, custom_zstack_id) = cmd.get_unchecked(UPDATE_SCREENSHOT_CROP);
+                    let screen_img = self.image_data_arc.clone().unwrap();
+
+                    // it checks if the rect is inside the size of the image
+                    if rect_crop.width() as u32 >= (*screen_img).width()
+                        || rect_crop.height() as u32 >= (*screen_img).height()
+                        || rect_crop.x1 as u32 >= (*screen_img).width()
+                        || rect_crop.y1 as u32 >= (*screen_img).height()
+                        || rect_crop.x0 as u32 >= (*screen_img).width()
+                        || rect_crop.y0 as u32 >= (*screen_img).height()
+                    {
+                        let screen_img_rect = Rect {
+                            x0: 0.,
+                            y0: 0.,
+                            x1: screen_img.width() as f64,
+                            y1: screen_img.height() as f64
+                        };
+                        ctx.submit_command(UPDATE_RECT_SIZE.with(screen_img_rect)); // reset of the rect
+                        return;
+                    }
 
                     let img_resized = (*screen_img).clone().crop(rect_crop.x0 as u32, rect_crop.y0 as u32, rect_crop.x1 as u32, rect_crop.y1 as u32);
+
+                    let screen_img_rect = Rect {
+                        x0: 0.,
+                        y0: 0.,
+                        x1: img_resized.width() as f64,
+                        y1: img_resized.height() as f64
+                    };
+                    ctx.submit_command(UPDATE_RECT_SIZE.with(screen_img_rect)); // reset of the rect
 
                     self.set_image_data(ImageBuf::from_raw(
                         Arc::<[u8]>::from(img_resized.as_bytes()),
@@ -166,10 +196,25 @@ impl<T: Data> Widget<T> for ScreenshotImage {
                     self.set_image_data_arc(img.clone());
 
                     ctx.get_external_handle()
-                        .submit_command(UPDATE_BACK_IMG,img,*custom_zstack_id)
+                        .submit_command(UPDATE_BACK_IMG, img, *custom_zstack_id)
                         .expect("Error sending the event to the screenshot widget");
+
                     ctx.request_layout();
                     ctx.request_paint();
+                }
+                if cmd.is(UPDATE_SCREENSHOT_CROP_CLOSE) {
+                    match self.image_data_arc.clone() {
+                        Some(screen_img) => {
+                            let screen_img_rect = Rect {
+                                x0: 0.,
+                                y0: 0.,
+                                x1: screen_img.width() as f64,
+                                y1: screen_img.height() as f64
+                            };
+                            ctx.submit_command(UPDATE_RECT_SIZE.with(screen_img_rect)); // reset of the rect
+                        },
+                        None => {}
+                    }
                 }
             }
             _ => {}

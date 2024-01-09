@@ -1,16 +1,11 @@
 mod custom_widget;
 
-use crate::custom_widget::{
-    Alert, ColoredButton, CustomSlider, CustomZStack, OverImages, ScreenshotImage, SelectedRect,
-    ShortcutKeys, StateShortcutKeys, TakeScreenshotButton, CREATE_ZSTACK, SAVE_OVER_IMG,
-    SAVE_SCREENSHOT, SHORTCUT_KEYS, SHOW_OVER_IMG, UPDATE_BACK_IMG, UPDATE_COLOR, UPDATE_RECT_SIZE,
-    UPDATE_SCREENSHOT_CROP,
-};
+use crate::custom_widget::{Alert, ColoredButton, CustomSlider, CustomZStack, OverImages, ScreenshotImage, SelectedRect, ShortcutKeys, StateShortcutKeys, TakeScreenshotButton, CREATE_ZSTACK, SAVE_OVER_IMG, SAVE_SCREENSHOT, SHORTCUT_KEYS, SHOW_OVER_IMG, UPDATE_BACK_IMG, UPDATE_COLOR, UPDATE_RECT_SIZE, UPDATE_SCREENSHOT_CROP, UPDATE_SCREENSHOT_CROP_CLOSE};
 use druid::commands::SHOW_ABOUT;
 use druid::keyboard_types::Code;
 use druid::piet::ImageFormat;
 use druid::widget::{
-    Align, Button, Click, Container, ControllerHost, CrossAxisAlignment, Either, Flex,
+    Align, Button, Click, Container, ControllerHost, CrossAxisAlignment, Either, FillStrat, Flex,
     IdentityWrapper, Label, LensWrap, LineBreaking, MainAxisAlignment, Scroll, Stepper, TextBox,
     ViewSwitcher, ZStack,
 };
@@ -27,9 +22,6 @@ use std::collections::HashSet;
 use std::path::Path;
 use std::process::exit;
 use std::sync::Arc;
-
-//TODO: Set the GUI error messages everywhere they need!
-//TODO: Error handling.
 
 const STARTING_IMG_PATH: &'static str = "./src/images/starting_img.png";
 
@@ -85,13 +77,14 @@ struct AppState {
     text_field_zstack: bool,
     text_field: String,
     crop_screenshot_enabled: bool,
-    rename_file_enabled: bool,
+    rename_file_enabled: bool
 }
 
 fn main() {
-
     // Verify if the screenshot dir exists
-    if std::fs::metadata(BASE_PATH_CONSTANT).is_ok() && std::fs::metadata(BASE_PATH_CONSTANT).unwrap().is_dir() {
+    if std::fs::metadata(BASE_PATH_CONSTANT).is_ok()
+        && std::fs::metadata(BASE_PATH_CONSTANT).unwrap().is_dir()
+    {
     } else {
         match std::fs::create_dir(BASE_PATH_CONSTANT) {
             Ok(_) => {}
@@ -106,7 +99,6 @@ fn main() {
         .title("Welcome!")
         .menu(make_menu)
         .with_min_size((1200., 670.))
-        //.window_size((1200., 670.))
         .set_window_state(WindowState::Maximized)
         .set_position((50., 20.));
 
@@ -142,7 +134,7 @@ fn main() {
         text_field_zstack: true,
         text_field: "".to_string(),
         crop_screenshot_enabled: false,
-        rename_file_enabled: false,
+        rename_file_enabled: false
     };
 
     let delegate = Delegate;
@@ -458,7 +450,7 @@ fn build_screenshot_widget(monitor: usize) -> impl Widget<AppState> {
         data.state = State::ScreenTaken(ImageModified::NotSavable);
         data.delay = 0.;
         data.alert
-            .show_alert("The image has been saved on the disk!"); // TODO: it should be moved after saving the image
+            .show_alert("The image has been saved on the disk!");
     });
 
     let delay_value = Label::dynamic(|data: &AppState, _env| data.delay.to_string())
@@ -516,9 +508,6 @@ fn build_screenshot_crop_widget(monitor: usize) -> impl Widget<AppState> {
 }
 
 fn build_root_widget() -> impl Widget<AppState> {
-    //let *SCREENSHOT_WIDGET_ID = WidgetId::next();
-    //let zstack_id = WidgetId::next();
-
     let take_screenshot_button = Either::new(
         |data: &AppState, _env| data.crop_screenshot_enabled == false,
         ColoredButton::from_label(Label::new(|data: &AppState, _env: &_| match data.state {
@@ -567,7 +556,6 @@ fn build_root_widget() -> impl Widget<AppState> {
                     .with((OverImages::Remove, None))
                     .to(Target::Widget(data.custom_zstack_id.unwrap())),
             );
-            //data.state = State::ScreenTaken(ImageModified::NotSavable);
         }),
         Label::new(""),
     );
@@ -622,6 +610,7 @@ fn build_root_widget() -> impl Widget<AppState> {
             1usize,
             1usize,
         ))
+        .fill_mode(FillStrat::ScaleDown)
         .on_added(move |img, ctx, data: &AppState, _env| {
             if Path::new(STARTING_IMG_PATH).exists() {
                 let screen_img = Arc::new(
@@ -663,10 +652,10 @@ fn build_root_widget() -> impl Widget<AppState> {
         |data: &AppState, _env| data.crop_screenshot_enabled == true,
         ZStack::new(zstack_crop)
             .with_child(
-                build_screenshot_crop_widget(0), // TODO: trovare una soluzione per il monitor
+                build_screenshot_crop_widget(0),
                 Vec2::new(1.0, 1.0),
                 Vec2::ZERO,
-                UnitPoint::TOP_LEFT,
+                UnitPoint::CENTER,
                 Vec2::new(0., 0.),
             )
             .padding((10.0, 10.0)),
@@ -678,9 +667,7 @@ fn build_root_widget() -> impl Widget<AppState> {
         .on_click(|ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
             let (base_path, name) = file_name(data.name.clone(), data.base_path.clone());
             data.name = (*name.clone()).to_string();
-
-            data.alert
-                .show_alert("The image has been saved on the disk!"); // TODO: it should be moved after saving the image
+            data.alert.show_alert("The image has been saved on the disk!");
 
             ctx.submit_command(
                 UPDATE_SCREENSHOT_CROP
@@ -709,23 +696,7 @@ fn build_root_widget() -> impl Widget<AppState> {
         .on_click(|ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
             data.crop_screenshot_enabled = false; // disable the crop screenshot widget
 
-            let mut monitors = Screen::get_monitors();
-            monitors.sort_by_key(|monitor| !monitor.is_primary());
-            let index: usize =
-                std::str::FromStr::from_str(data.screen.trim_start_matches(".")).unwrap();
-            monitors.sort_by_key(|monitor| !monitor.is_primary());
-
-            let primary_monitor_rect = monitors
-                .get(index)
-                .expect("Can't find the selected monitor!")
-                .virtual_rect();
-            let screen_img_rect = Rect {
-                x0: 0.,
-                y0: 0.,
-                x1: primary_monitor_rect.width() as f64,
-                y1: primary_monitor_rect.height() as f64,
-            };
-            ctx.submit_command(UPDATE_RECT_SIZE.with(screen_img_rect)); // reset of the rect
+            ctx.submit_command(UPDATE_SCREENSHOT_CROP_CLOSE.to(Target::Widget(*SCREENSHOT_WIDGET_ID)));
 
             data.shortcut_keys.pressed_hot_keys = HashSet::new(); // clean map
             data.shortcut_keys.state = StateShortcutKeys::NotBusy; // it has finished its job
@@ -1098,7 +1069,7 @@ fn build_root_widget() -> impl Widget<AppState> {
                     let (base_path, name) = file_name(data.name.clone(), data.base_path.clone());
 
                     data.alert
-                        .show_alert("The image has been saved on the disk!"); // TODO: it should be moved after saving the image
+                        .show_alert("The image has been saved on the disk!");
 
                     ctx.submit_command(
                         SAVE_OVER_IMG.with((
@@ -1114,18 +1085,14 @@ fn build_root_widget() -> impl Widget<AppState> {
                     data.state = State::ScreenTaken(ImageModified::NotSavable);
                     data.rename_file_enabled = false;
                 }),
-            ColoredButton::from_label(Label::new("Return back").with_text_color(Color::BLACK))
+            ColoredButton::from_label(Label::new("Back").with_text_color(Color::BLACK))
                 .with_color(Color::rgb(0.8, 0.8, 0.))
-                .on_click(move |_ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
-                    /*if data.rename_file_enabled == false {
-                        data.alert.show_alert("The image has been saved on the disk!"); // TODO: it should be moved after saving the image
-                    } else {
-                        data.alert.show_alert("Changes have been successfully saved!");
-                    }*/
-
-                    data.state = State::ScreenTaken(ImageModified::NotSavable);
-                    data.rename_file_enabled = false;
-                }),
+                .on_click(
+                    move |_ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
+                        data.state = State::ScreenTaken(ImageModified::NotSavable);
+                        data.rename_file_enabled = false;
+                    },
+                ),
         ),
         Label::new(""),
     );
@@ -1142,7 +1109,7 @@ fn build_root_widget() -> impl Widget<AppState> {
             data.state == State::ScreenTaken(ImageModified::NotSavable)
                 && data.crop_screenshot_enabled == false
         },
-        ColoredButton::from_label(Label::new("Rename Image"))
+        ColoredButton::from_label(Label::new("Change Name Image"))
             .with_color(Color::rgb(0., 120. / 256., 0.))
             .on_click(
                 move |_ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
@@ -1220,7 +1187,6 @@ fn build_root_widget() -> impl Widget<AppState> {
         ))
         .with_default_spacer()
         .with_child(screen_selector);
-    //.with_child(ShortcutKeys {favorite_hot_keys: HashSet::new(), pressed_hot_keys: HashSet::new(), state: NotBusy});
 
     let alert_row = Flex::row()
         .with_child(druid::widget::Either::new(
@@ -1237,11 +1203,9 @@ fn build_root_widget() -> impl Widget<AppState> {
             .with_default_spacer()
             .with_child(Flex::row().with_child(alert_row))
             .with_default_spacer()
-            //flex.set_must_fill_main_axis(true);
             .with_child(spaced_zstack),
     )
     .vertical();
-    //flex.set_main_axis_alignment(MainAxisAlignment::Center);
     let layout = scroll.background(Color::WHITE).expand().padding(5.);
     layout
 }
@@ -1383,7 +1347,6 @@ fn create_color_button(
 * This function assigns a name and a file path to an image stored on the disk.
 */
 fn file_name(data_name: String, base_path: String) -> (Box<str>, Box<str>) {
-    //TODO: use a date.
     let charset = "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
     let base_path_modified = base_path.into_boxed_str();
 

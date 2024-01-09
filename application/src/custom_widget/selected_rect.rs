@@ -28,6 +28,7 @@ pub struct SelectedRect {
     rect: Rect,
     mouse: IfMousePressedWhere,
     show_overlay: bool,
+    fix_rect: Rect
 }
 
 impl SelectedRect {
@@ -39,15 +40,19 @@ impl SelectedRect {
             .get(monitor)
             .expect("Can't find the selected monitor!")
             .virtual_rect();
+
+        let rect = Rect {
+            x0: 1.,
+            y0: 1.,
+            x1: primary_monitor_rect.width(),
+            y1: primary_monitor_rect.height()
+        };
+
         Self {
-            rect: Rect {
-                x0: 2.,
-                y0: 2.,
-                x1: primary_monitor_rect.width() - 5.,
-                y1: primary_monitor_rect.height() - 5.,
-            },
+            rect,
             mouse: IfMousePressedWhere::NotInterested,
             show_overlay: false,
+            fix_rect: rect
         }
     }
 
@@ -85,14 +90,16 @@ impl SelectedRect {
     }
 
     pub fn reset_rect(&mut self, rect: &Rect) {
-        self.rect = Rect {
+        let rect_updated = Rect {
             x0: 0.,
             y0: 0.,
             x1: rect.width(),
             y1: rect.height(),
         };
+        self.rect = rect_updated;
         self.mouse =  IfMousePressedWhere::NotInterested;
         self.show_overlay = false;
+        self.fix_rect = rect_updated;
     }
 }
 
@@ -206,25 +213,17 @@ impl Widget<Rect> for SelectedRect {
         }
 
         //Validity check: inside the monitor size
-        let mut monitors = Screen::get_monitors();
-        monitors.sort_by_key(|monitor| !monitor.is_primary());
-        let primary_monitor_rect = monitors
-            //.into_iter().filter(|m|m.is_primary()).collect::<Vec<Monitor>>()
-            .first()
-            .expect("No primary monitor found!")
-            .virtual_rect();
-
-        if self.rect.x0 < primary_monitor_rect.x0 {
-            self.rect.x0 = primary_monitor_rect.x0;
+        if self.rect.x0 < self.fix_rect.x0 {
+            self.rect.x0 = self.fix_rect.x0;
         }
-        if self.rect.y0 < primary_monitor_rect.y0 {
-            self.rect.y0 = primary_monitor_rect.y0;
+        if self.rect.y0 < self.fix_rect.y0 {
+            self.rect.y0 = self.fix_rect.y0;
         }
-        if self.rect.x1 > primary_monitor_rect.x1 {
-            self.rect.x1 = primary_monitor_rect.x1 - BORDER_WIDTH;
+        if self.rect.x1 > self.fix_rect.x1 {
+            self.rect.x1 = self.fix_rect.x1 - BORDER_WIDTH;
         }
-        if self.rect.y1 > primary_monitor_rect.y1 {
-            self.rect.y1 = primary_monitor_rect.y1 - BORDER_WIDTH;
+        if self.rect.y1 > self.fix_rect.y1 {
+            self.rect.y1 = self.fix_rect.y1 - BORDER_WIDTH;
         }
         *data = self.rect;
     }

@@ -1,5 +1,3 @@
-//TODO: bug: the over-image disappear while moving
-
 use druid::debug_state::DebugState;
 use tracing::{instrument, trace, warn};
 
@@ -268,16 +266,18 @@ impl<T: Data> Widget<T> for ResizableBox<T> {
                             self.mouse = IfMousePressedWhere::Inside(pos);
                         }
                     }
-                    /* TODO
+
+
                     //Keeps validity
-                    while rect.x1 <= rect.x0+BORDER_WIDTH+10.{
+                    /*while rect.x1 <= rect.x0+BORDER_WIDTH+10.{
                         rect.x1 += 3.+BORDER_WIDTH;
                         rect.x0 -= 3.+BORDER_WIDTH;
                     }
                     while rect.y1 <= rect.y0+BORDER_WIDTH+10.{
                         rect.y1 += 3.+BORDER_WIDTH;
                         rect.y0 -= 3.+BORDER_WIDTH;
-                    }
+                    }*/
+
                     //Validity check: inside the window size
                     let window_rect = ctx.window().get_size().to_rect();
                     let mut inside_rect = Rect::ZERO;
@@ -285,20 +285,19 @@ impl<T: Data> Widget<T> for ResizableBox<T> {
                     inside_rect.x1 = rect.x1 + ctx.window_origin().x;
                     inside_rect.y0 = rect.y0 + ctx.window_origin().y;
                     inside_rect.y1 = rect.y1 + ctx.window_origin().y;
-                    if inside_rect.x0<= window_rect.x0+1.{
-                        self.mouse = IfMousePressedWhere::NotInterested;
-                    }
-                    if inside_rect.y0<= window_rect.y0+1.{
-                        self.mouse = IfMousePressedWhere::NotInterested;
-                    }
-                    if inside_rect.x1 >= window_rect.x1-1.{
-                        self.mouse = IfMousePressedWhere::NotInterested;
-                    }
-                    if inside_rect.y1 >= window_rect.y1-1.{
-                        self.mouse = IfMousePressedWhere::NotInterested;
-                    }
-                    */
 
+                    if inside_rect.x0 <= window_rect.x0 + 15. {
+                        self.mouse = IfMousePressedWhere::NotInterested;
+                    }
+                    if inside_rect.y0 <= window_rect.y0 + 97. {
+                        self.mouse = IfMousePressedWhere::NotInterested;
+                    }
+                    if inside_rect.x1 >= window_rect.x1 - 31. {
+                        self.mouse = IfMousePressedWhere::NotInterested;
+                    }
+                    if inside_rect.y1 >= window_rect.y1 - 73. {
+                        self.mouse = IfMousePressedWhere::NotInterested;
+                    }
 
                     self.rect = Some(rect);
                     self.width = Some(KeyOrValue::Concrete(rect.width()));
