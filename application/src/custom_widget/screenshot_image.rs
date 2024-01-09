@@ -116,11 +116,6 @@ impl ScreenshotImage {
         self.image_data_arc = Some(image_data_arc);
         self.invalidate();
     }
-
-    #[inline]
-    fn image_data(&self) -> ImageBuf {
-        self.image_data.clone()
-    }
 }
 
 impl<T: Data> Widget<T> for ScreenshotImage {
