@@ -210,6 +210,7 @@ impl AppDelegate<AppState> for Delegate {
                             .transparent(true)
                             .resizable(false)
                             .show_titlebar(false)
+                            .window_size((monitor.virtual_rect().x1, monitor.virtual_rect().y1))
                             .set_window_state(WindowState::Maximized)
                             .set_position(monitor.virtual_rect().origin()),
                     );
@@ -548,8 +549,9 @@ fn build_root_widget() -> impl Widget<AppState> {
                     .transparent(true)
                     .resizable(false)
                     .show_titlebar(false)
-                    .set_window_state(WindowState::Maximized)
-                    .set_position(monitor.virtual_rect().origin()),
+                    .set_position(monitor.virtual_rect().origin())
+                    .window_size((monitor.virtual_rect().x1, monitor.virtual_rect().y1))
+                    .set_window_state(WindowState::Maximized),
             );
 
             ctx.submit_command(
