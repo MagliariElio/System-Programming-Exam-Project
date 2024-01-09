@@ -1,0 +1,10 @@
+/home/elion-man/LEZIONE/PDS/PROGETTO/application/target/release/deps/libfluent_langneg-c1beef667a65fb7e.rmeta: /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fluent-langneg-0.13.0/src/lib.rs /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fluent-langneg-0.13.0/src/accepted_languages.rs /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fluent-langneg-0.13.0/src/negotiate/mod.rs /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fluent-langneg-0.13.0/src/negotiate/likely_subtags.rs
+
+/home/elion-man/LEZIONE/PDS/PROGETTO/application/target/release/deps/libfluent_langneg-c1beef667a65fb7e.rlib: /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fluent-langneg-0.13.0/src/lib.rs /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fluent-langneg-0.13.0/src/accepted_languages.rs /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fluent-langneg-0.13.0/src/negotiate/mod.rs /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fluent-langneg-0.13.0/src/negotiate/likely_subtags.rs
+
+/home/elion-man/LEZIONE/PDS/PROGETTO/application/target/release/deps/fluent_langneg-c1beef667a65fb7e.d: /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fluent-langneg-0.13.0/src/lib.rs /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fluent-langneg-0.13.0/src/accepted_languages.rs /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fluent-langneg-0.13.0/src/negotiate/mod.rs /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fluent-langneg-0.13.0/src/negotiate/likely_subtags.rs
+
+/home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fluent-langneg-0.13.0/src/lib.rs:
+/home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fluent-langneg-0.13.0/src/accepted_languages.rs:
+/home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fluent-langneg-0.13.0/src/negotiate/mod.rs:
+/home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fluent-langneg-0.13.0/src/negotiate/likely_subtags.rs:

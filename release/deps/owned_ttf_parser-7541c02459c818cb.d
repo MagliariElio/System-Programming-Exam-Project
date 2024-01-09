@@ -1,0 +1,10 @@
+/home/elion-man/LEZIONE/PDS/PROGETTO/application/target/release/deps/libowned_ttf_parser-7541c02459c818cb.rmeta: /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/owned_ttf_parser-0.15.2/src/lib.rs /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/owned_ttf_parser-0.15.2/src/convert.rs /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/owned_ttf_parser-0.15.2/src/owned.rs /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/owned_ttf_parser-0.15.2/src/preparse.rs
+
+/home/elion-man/LEZIONE/PDS/PROGETTO/application/target/release/deps/libowned_ttf_parser-7541c02459c818cb.rlib: /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/owned_ttf_parser-0.15.2/src/lib.rs /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/owned_ttf_parser-0.15.2/src/convert.rs /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/owned_ttf_parser-0.15.2/src/owned.rs /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/owned_ttf_parser-0.15.2/src/preparse.rs
+
+/home/elion-man/LEZIONE/PDS/PROGETTO/application/target/release/deps/owned_ttf_parser-7541c02459c818cb.d: /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/owned_ttf_parser-0.15.2/src/lib.rs /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/owned_ttf_parser-0.15.2/src/convert.rs /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/owned_ttf_parser-0.15.2/src/owned.rs /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/owned_ttf_parser-0.15.2/src/preparse.rs
+
+/home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/owned_ttf_parser-0.15.2/src/lib.rs:
+/home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/owned_ttf_parser-0.15.2/src/convert.rs:
+/home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/owned_ttf_parser-0.15.2/src/owned.rs:
+/home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/owned_ttf_parser-0.15.2/src/preparse.rs:

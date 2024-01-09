@@ -1,0 +1,10 @@
+/home/elion-man/LEZIONE/PDS/PROGETTO/application/target/release/deps/libwayland_client-e068034cdc1e6ab8.rmeta: /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/wayland-client-0.30.2/src/lib.rs /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/wayland-client-0.30.2/src/conn.rs /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/wayland-client-0.30.2/src/event_queue.rs /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/wayland-client-0.30.2/src/globals.rs
+
+/home/elion-man/LEZIONE/PDS/PROGETTO/application/target/release/deps/libwayland_client-e068034cdc1e6ab8.rlib: /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/wayland-client-0.30.2/src/lib.rs /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/wayland-client-0.30.2/src/conn.rs /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/wayland-client-0.30.2/src/event_queue.rs /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/wayland-client-0.30.2/src/globals.rs
+
+/home/elion-man/LEZIONE/PDS/PROGETTO/application/target/release/deps/wayland_client-e068034cdc1e6ab8.d: /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/wayland-client-0.30.2/src/lib.rs /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/wayland-client-0.30.2/src/conn.rs /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/wayland-client-0.30.2/src/event_queue.rs /home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/wayland-client-0.30.2/src/globals.rs
+
+/home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/wayland-client-0.30.2/src/lib.rs:
+/home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/wayland-client-0.30.2/src/conn.rs:
+/home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/wayland-client-0.30.2/src/event_queue.rs:
+/home/elion-man/.cargo/registry/src/index.crates.io-6f17d22bba15001f/wayland-client-0.30.2/src/globals.rs:
