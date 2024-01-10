@@ -1,3 +1,0 @@
-/home/elion-man/LEZIONE/PDS/PROGETTO/application/target/release/build/clippers-42eb64409d765852/out/build/CMakeFiles/clip.dir
-/home/elion-man/LEZIONE/PDS/PROGETTO/application/target/release/build/clippers-42eb64409d765852/out/build/CMakeFiles/edit_cache.dir
-/home/elion-man/LEZIONE/PDS/PROGETTO/application/target/release/build/clippers-42eb64409d765852/out/build/CMakeFiles/rebuild_cache.dir
