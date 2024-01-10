@@ -1,6 +1,11 @@
 mod custom_widget;
 
-use crate::custom_widget::{Alert, ColoredButton, CustomSlider, CustomZStack, OverImages, ScreenshotImage, SelectedRect, ShortcutKeys, StateShortcutKeys, TakeScreenshotButton, CREATE_ZSTACK, SAVE_OVER_IMG, SAVE_SCREENSHOT, SHORTCUT_KEYS, SHOW_OVER_IMG, UPDATE_BACK_IMG, UPDATE_COLOR, UPDATE_RECT_SIZE, UPDATE_SCREENSHOT_CROP, UPDATE_SCREENSHOT_CROP_CLOSE};
+use crate::custom_widget::{
+    Alert, ColoredButton, CustomSlider, CustomZStack, OverImages, ScreenshotImage, SelectedRect,
+    ShortcutKeys, StateShortcutKeys, TakeScreenshotButton, CREATE_ZSTACK, SAVE_OVER_IMG,
+    SAVE_SCREENSHOT, SHORTCUT_KEYS, SHOW_OVER_IMG, UPDATE_BACK_IMG, UPDATE_COLOR, UPDATE_RECT_SIZE,
+    UPDATE_SCREENSHOT_CROP, UPDATE_SCREENSHOT_CROP_CLOSE,
+};
 use druid::commands::SHOW_ABOUT;
 use druid::keyboard_types::Code;
 use druid::piet::ImageFormat;
@@ -77,7 +82,7 @@ struct AppState {
     text_field_zstack: bool,
     text_field: String,
     crop_screenshot_enabled: bool,
-    rename_file_enabled: bool
+    rename_file_enabled: bool,
 }
 
 fn main() {
@@ -134,7 +139,7 @@ fn main() {
         text_field_zstack: true,
         text_field: "".to_string(),
         crop_screenshot_enabled: false,
-        rename_file_enabled: false
+        rename_file_enabled: false,
     };
 
     let delegate = Delegate;
@@ -430,7 +435,10 @@ fn build_screenshot_widget(monitor: usize) -> impl Widget<AppState> {
     .with_color(Color::rgb8(70, 250, 70).with_alpha(1.))
     .on_click(|ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
         data.shortcut_keys.state = StateShortcutKeys::NotBusy; // reset of shortcut state
+
+        data.name = "".to_string(); // reset name file
         let (base_path, name) = file_name(data.name.clone(), data.base_path.clone());
+        data.name = (*name.clone()).to_string();
 
         ctx.submit_command(
             SAVE_SCREENSHOT
@@ -505,7 +513,6 @@ fn build_screenshot_widget(monitor: usize) -> impl Widget<AppState> {
 
 fn build_screenshot_crop_widget(monitor: usize) -> impl Widget<AppState> {
     let rectangle = LensWrap::new(SelectedRect::new(monitor), AppState::rect);
-
     Container::new(rectangle)
 }
 
@@ -652,7 +659,10 @@ fn build_root_widget() -> impl Widget<AppState> {
     });
 
     let spaced_zstack = Either::new(
-        |data: &AppState, _env| data.crop_screenshot_enabled == true,
+        |data: &AppState, _env| {
+            data.state == State::ScreenTaken(ImageModified::Savable)
+                && data.crop_screenshot_enabled == true
+        },
         ZStack::new(zstack_crop)
             .with_child(
                 build_screenshot_crop_widget(0),
@@ -665,12 +675,11 @@ fn build_root_widget() -> impl Widget<AppState> {
         Container::new(zstack).padding((10.0, 10.0)),
     );
 
-    let crop_screenshot_button = TakeScreenshotButton::from_label(Label::new("Save"))
+    let crop_screenshot_save_button = TakeScreenshotButton::from_label(Label::new("Update Image"))
         .with_color(Color::rgb8(0, 150, 0).with_alpha(1.))
         .on_click(|ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
             let (base_path, name) = file_name(data.name.clone(), data.base_path.clone());
             data.name = (*name.clone()).to_string();
-            data.alert.show_alert("The image has been saved on the disk!");
 
             ctx.submit_command(
                 UPDATE_SCREENSHOT_CROP
@@ -691,15 +700,21 @@ fn build_root_widget() -> impl Widget<AppState> {
             data.shortcut_keys.state = StateShortcutKeys::NotBusy; // reset of shortcut state
             data.shortcut_keys.pressed_hot_keys = HashSet::new(); // clean map
 
+            data.alert
+                .show_alert("The image has been saved on the disk!");
+
             data.state = State::ScreenTaken(ImageModified::NotSavable);
         });
 
-    let close_crop_screenshop_button = ColoredButton::from_label(Label::new("Close"))
+    let close_crop_screenshop_button = ColoredButton::from_label(Label::new("Cancel"))
         .with_color(Color::rgb8(150, 0, 0).with_alpha(1.))
         .on_click(|ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
             data.crop_screenshot_enabled = false; // disable the crop screenshot widget
+            data.state = State::ScreenTaken(ImageModified::NotSavable);
 
-            ctx.submit_command(UPDATE_SCREENSHOT_CROP_CLOSE.to(Target::Widget(*SCREENSHOT_WIDGET_ID)));
+            ctx.submit_command(
+                UPDATE_SCREENSHOT_CROP_CLOSE.to(Target::Widget(*SCREENSHOT_WIDGET_ID)),
+            );
 
             data.shortcut_keys.pressed_hot_keys = HashSet::new(); // clean map
             data.shortcut_keys.state = StateShortcutKeys::NotBusy; // it has finished its job
@@ -711,7 +726,7 @@ fn build_root_widget() -> impl Widget<AppState> {
                 .with_text_color(Color::BLACK)
                 .padding(2.),
         )
-        .with_child(crop_screenshot_button)
+        .with_child(crop_screenshot_save_button)
         .with_default_spacer()
         .with_child(close_crop_screenshop_button);
 
@@ -730,10 +745,18 @@ fn build_root_widget() -> impl Widget<AppState> {
                     data.shortcut_keys.pressed_hot_keys = HashSet::new(); // clean map
 
                     data.crop_screenshot_enabled = true;
+                    data.state = State::ScreenTaken(ImageModified::Savable);
                 }),
-            buttons_crop_screenshot_flex,
+            Label::new(""),
         ),
-        Label::new(""),
+        Either::new(
+            |data: &AppState, _env| {
+                data.state == State::ScreenTaken(ImageModified::Savable)
+                    && data.crop_screenshot_enabled == true
+            },
+            buttons_crop_screenshot_flex,
+            Label::new(""),
+        ),
     );
 
     let name_selector = Either::new(
@@ -869,10 +892,7 @@ fn build_root_widget() -> impl Widget<AppState> {
     );
 
     let circle_button = Either::new(
-        |data: &AppState, _env| {
-            data.state == State::ScreenTaken(ImageModified::NotSavable)
-                && data.crop_screenshot_enabled == false
-        },
+        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::NotSavable),
         Button::from_label(Label::new("⭕")).on_click(
             move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
                 ctx.submit_command(
@@ -887,10 +907,7 @@ fn build_root_widget() -> impl Widget<AppState> {
     );
 
     let triangle_button = Either::new(
-        |data: &AppState, _env| {
-            data.state == State::ScreenTaken(ImageModified::NotSavable)
-                && data.crop_screenshot_enabled == false
-        },
+        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::NotSavable),
         Button::from_label(Label::new("△")).on_click(
             move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
                 ctx.submit_command(
@@ -904,10 +921,7 @@ fn build_root_widget() -> impl Widget<AppState> {
         Label::new(""),
     );
     let arrow_button = Either::new(
-        |data: &AppState, _env| {
-            data.state == State::ScreenTaken(ImageModified::NotSavable)
-                && data.crop_screenshot_enabled == false
-        },
+        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::NotSavable),
         Button::from_label(Label::new("→")).on_click(
             move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
                 ctx.submit_command(
@@ -921,10 +935,7 @@ fn build_root_widget() -> impl Widget<AppState> {
         Label::new(""),
     );
     let highlighter_button = Either::new(
-        |data: &AppState, _env| {
-            data.state == State::ScreenTaken(ImageModified::NotSavable)
-                && data.crop_screenshot_enabled == false
-        },
+        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::NotSavable),
         Button::from_label(Label::new("⎚")).on_click(
             move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
                 ctx.submit_command(
@@ -942,7 +953,6 @@ fn build_root_widget() -> impl Widget<AppState> {
         |data: &AppState, _| {
             data.text_field_zstack == true
                 && data.state == State::ScreenTaken(ImageModified::NotSavable)
-                && data.crop_screenshot_enabled == false
         },
         Flex::row()
             .with_child(
@@ -981,10 +991,7 @@ fn build_root_widget() -> impl Widget<AppState> {
     );
 
     let text_button = Either::new(
-        |data: &AppState, _env| {
-            data.state == State::ScreenTaken(ImageModified::NotSavable)
-                && data.crop_screenshot_enabled == false
-        },
+        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::NotSavable),
         Button::from_label(Label::new("Text")).on_click(
             move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
                 data.text_field_zstack = true;
@@ -995,10 +1002,7 @@ fn build_root_widget() -> impl Widget<AppState> {
     );
 
     let colors_button = Either::new(
-        |data: &AppState, _env| {
-            data.state == State::ScreenTaken(ImageModified::NotSavable)
-                && data.crop_screenshot_enabled == false
-        },
+        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::NotSavable),
         ColoredButton::from_label(Label::new("Color"))
             .with_color(Color::PURPLE)
             .on_click(move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
@@ -1063,7 +1067,10 @@ fn build_root_widget() -> impl Widget<AppState> {
         Label::new(""),
     );
     let save_button = Either::new(
-        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::Savable),
+        |data: &AppState, _env| {
+            data.state == State::ScreenTaken(ImageModified::Savable)
+                && data.crop_screenshot_enabled == false
+        },
         Either::new(
             |data: &AppState, _env| data.rename_file_enabled == false,
             ColoredButton::from_label(Label::new("Save"))
@@ -1107,11 +1114,8 @@ fn build_root_widget() -> impl Widget<AppState> {
     })
     .with_text_color(Color::BLACK.with_alpha(0.85));
 
-    let save_button_later = Either::new(
-        |data: &AppState, _env| {
-            data.state == State::ScreenTaken(ImageModified::NotSavable)
-                && data.crop_screenshot_enabled == false
-        },
+    /*let save_button_later = Either::new(
+        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::NotSavable),
         ColoredButton::from_label(Label::new("Change Name Image"))
             .with_color(Color::rgb(0., 120. / 256., 0.))
             .on_click(
@@ -1120,6 +1124,12 @@ fn build_root_widget() -> impl Widget<AppState> {
                     data.state = State::ScreenTaken(ImageModified::Savable);
                 },
             ),
+        Label::new(""),
+    );*/
+
+    let screen_selector_label = Either::new(
+        |data: &AppState, _env| data.crop_screenshot_enabled == false,
+        Label::new("Select Screen:").with_text_color(Color::BLACK.with_alpha(0.85)),
         Label::new(""),
     );
 
@@ -1176,18 +1186,14 @@ fn build_root_widget() -> impl Widget<AppState> {
         .with_child(extension_selector)
         .with_default_spacer()
         .with_child(save_button)
-        .with_default_spacer()
-        .with_child(save_button_later)
+        //.with_default_spacer()
+        //.with_child(save_button_later)
         .with_default_spacer()
         .with_child(Container::new(crop_screenshot_button))
         .with_default_spacer()
         .with_flex_child(Container::new(take_screenshot_button), 1.0)
         .with_default_spacer()
-        .with_child(Either::new(
-            |data: &AppState, _env| data.crop_screenshot_enabled == false,
-            Label::new("Select Screen:").with_text_color(Color::BLACK.with_alpha(0.85)),
-            Label::new(""),
-        ))
+        .with_child(screen_selector_label)
         .with_default_spacer()
         .with_child(screen_selector);
 
