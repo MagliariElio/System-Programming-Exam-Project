@@ -269,7 +269,6 @@ impl AppDelegate<AppState> for Delegate {
                             .with((OverImages::Remove, None))
                             .to(Target::Widget(WidgetId::next())),
                     );
-                    data.state = State::ScreenTaken(ImageModified::NotSavable);
                 }
 
                 data.shortcut_keys.pressed_hot_keys = HashSet::new(); // clean map
