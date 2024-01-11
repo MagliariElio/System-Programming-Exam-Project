@@ -36,6 +36,7 @@ const Y0: f64 = 0.;
 const X1: f64 = 500.;
 const Y1: f64 = 500.;
 
+const BASE_PATH: &str = "./src/";
 const BASE_PATH_SCREENSHOT: &str = "./src/screenshots/";
 const BASE_PATH_FAVORITE_SHORTCUT: &str = "./src/shortcut/";
 const PATH_FAVORITE_SHORTCUT: &str = "./src/shortcut/shortcut_settings.json";
@@ -84,6 +85,7 @@ struct AppState {
 
 fn main() {
     // Verify if the screenshot dir exists
+    verify_exists_dir(BASE_PATH);
     verify_exists_dir(BASE_PATH_SCREENSHOT);
     verify_exists_dir(BASE_PATH_FAVORITE_SHORTCUT);
 

@@ -18,6 +18,7 @@ imageproc="0.23.0"
 rusttype="0.9.3"
 serde = "1.0.188"
 serde_json = "1.0.107"
+flate2 = "1.0.27"
 [dependencies.druid]
 version = "0.8.3"
 features = ["im","svg","image-all","image","serde"]

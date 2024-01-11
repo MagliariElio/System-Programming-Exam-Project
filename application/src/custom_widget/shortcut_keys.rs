@@ -1,8 +1,13 @@
 use std::collections::HashSet;
+use std::error::Error;
 use std::fs::{File, OpenOptions};
-use std::io::{Read, Write};
+use std::io::{Cursor, Read, Write};
 use std::process::exit;
 use druid::{Code, Data, Lens, Selector};
+use flate2::Compression;
+use flate2::read::ZlibDecoder;
+use flate2::write::ZlibEncoder;
+use image::EncodableLayout;
 use crate::{BASE_PATH_FAVORITE_SHORTCUT, BASE_PATH_SCREENSHOT};
 
 pub const SHORTCUT_KEYS: Selector = Selector::new("ShortcutKeys-Command");
@@ -30,20 +35,38 @@ impl Data for ShortcutKeys {
     }
 }
 
+fn compress(data: &[u8]) -> std::io::Result<Vec<u8>> {
+    let mut encoder = ZlibEncoder::new(Vec::<u8>::new(), Compression::best());
+    encoder.write_all(data).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+    let compressed_data = encoder.finish()?;
+    Ok(compressed_data)
+}
+
+fn decompress(data: Vec<u8>) -> Result<Vec<u8>, Box<dyn Error>> {
+    let cursor = Cursor::new(data);
+    let mut decoder = ZlibDecoder::new(cursor);
+    let mut decompressed_data = Vec::new();
+    decoder.read_to_end(&mut decompressed_data)?;
+    Ok(decompressed_data)
+}
+
 pub fn write_to_file<T>(file_path: &str, data: &T) -> Result<(), Box<dyn std::error::Error>>
     where
         T: serde::Serialize,
 {
     verify_exists_dir(BASE_PATH_FAVORITE_SHORTCUT);
     let serialized_data = serde_json::to_string(data)?;
+    let binding = compress(serialized_data.as_bytes())?;
+    let compress_serialized_data = binding.as_bytes();
 
+    //let serialized_compress_data = serde_json::to_string(&compress_serialized_data)?;
     let mut file = OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(true)
         .open(file_path)?;
 
-    file.write_all(serialized_data.as_bytes())?;
+    file.write_all(compress_serialized_data)?;
 
     Ok(())
 }
@@ -53,9 +76,11 @@ pub fn read_from_file<T>(file_path: &str) -> Option<T>
         T: for<'de> serde::Deserialize<'de>,
 {
     if let Ok(mut file) = File::open(file_path) {
-        let mut buffer = String::new();
-        if file.read_to_string(&mut buffer).is_ok() {
-            Some(serde_json::from_str(&buffer).ok()?)
+        let mut buffer = Vec::new();
+        if file.read_to_end(&mut buffer).is_ok() {
+            let decompress_serialized_data = decompress(buffer).ok()?;
+            let decompressed = std::str::from_utf8(&decompress_serialized_data).ok()?;
+            Some(serde_json::from_str(decompressed).ok()?)
         } else {
             None
         }
