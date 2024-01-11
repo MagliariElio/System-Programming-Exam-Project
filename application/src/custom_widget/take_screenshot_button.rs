@@ -9,8 +9,7 @@ use image::{DynamicImage, ImageFormat};
 use screenshots::{Screen};
 use tracing::{instrument, trace};
 use crate::BASE_PATH_SCREENSHOT;
-use crate::custom_widget::screenshot_image::UPDATE_SCREENSHOT;
-use crate::custom_widget::{UPDATE_BACK_IMG, verify_exists_dir};
+use crate::custom_widget::{UPDATE_BACK_IMG, UPDATE_SCREENSHOT, verify_exists_dir};
 
 pub const SAVE_SCREENSHOT: Selector<(Rect,WindowId,WidgetId,WidgetId,Box<str>,Box<str>,ImageFormat,u64,u8)> = Selector::new("Save the screenshot image, last param: where to save");
 

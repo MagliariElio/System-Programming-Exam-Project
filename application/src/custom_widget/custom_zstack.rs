@@ -1,6 +1,5 @@
-use crate::custom_widget::resizable_box::UPDATE_ORIGIN;
 use crate::custom_widget::screenshot_image::UPDATE_SCREENSHOT;
-use crate::custom_widget::{ResizableBox, verify_exists_dir};
+use crate::custom_widget::{ResizableBox, UPDATE_ORIGIN, verify_exists_dir};
 use druid::kurbo::common::FloatExt;
 use druid::piet::ImageFormat;
 use druid::widget::Image;
