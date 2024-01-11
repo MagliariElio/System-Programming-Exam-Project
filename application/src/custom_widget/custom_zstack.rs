@@ -1,6 +1,6 @@
 use crate::custom_widget::resizable_box::UPDATE_ORIGIN;
 use crate::custom_widget::screenshot_image::UPDATE_SCREENSHOT;
-use crate::custom_widget::ResizableBox;
+use crate::custom_widget::{ResizableBox, verify_exists_dir};
 use druid::kurbo::common::FloatExt;
 use druid::piet::ImageFormat;
 use druid::widget::Image;
@@ -16,6 +16,7 @@ use image::{ImageFormat as imgFormat, Rgba};
 use imageproc::drawing::draw_text_mut;
 use rusttype::{Font, Scale};
 use std::sync::Arc;
+use crate::BASE_PATH_SCREENSHOT;
 
 
 pub enum OverImages {
@@ -337,6 +338,9 @@ impl<T: Data> Widget<T> for CustomZStack<T> {
                         file_name,
                         file_format.extensions_str().first().unwrap()
                     );
+
+                    // it verify if exists the dir before saving the image
+                    verify_exists_dir(BASE_PATH_SCREENSHOT);
 
                     let new_img = self.save_new_img(&new_img_path, *file_format);
                     if new_img.is_some() {

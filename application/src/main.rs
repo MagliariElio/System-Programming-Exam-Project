@@ -1,8 +1,7 @@
 mod custom_widget;
 
-use crate::custom_widget::{Alert, ColoredButton, CustomSlider, CustomZStack, OverImages, ScreenshotImage, SelectedRect, ShortcutKeys, StateShortcutKeys, TakeScreenshotButton, CREATE_ZSTACK, SAVE_OVER_IMG, SAVE_SCREENSHOT, SHORTCUT_KEYS, SHOW_OVER_IMG, UPDATE_BACK_IMG, UPDATE_COLOR, UPDATE_RECT_SIZE, UPDATE_SCREENSHOT_CROP, UPDATE_SCREENSHOT_CROP_CLOSE};
+use crate::custom_widget::{read_from_file, write_to_file, Alert, ColoredButton, CustomSlider, CustomZStack, OverImages, ScreenshotImage, SelectedRect, ShortcutKeys, StateShortcutKeys, TakeScreenshotButton, CREATE_ZSTACK, SAVE_OVER_IMG, SAVE_SCREENSHOT, SHORTCUT_KEYS, SHOW_OVER_IMG, UPDATE_BACK_IMG, UPDATE_COLOR, UPDATE_RECT_SIZE, UPDATE_SCREENSHOT_CROP, UPDATE_SCREENSHOT_CROP_CLOSE, verify_exists_dir};
 use druid::commands::SHOW_ABOUT;
-use druid::keyboard_types::Code;
 use druid::piet::ImageFormat;
 use druid::widget::{
     Align, Button, Click, Container, ControllerHost, CrossAxisAlignment, Either, FillStrat, Flex,
@@ -11,23 +10,24 @@ use druid::widget::{
 };
 use druid::Target::{Auto, Window};
 use druid::{
-    commands as sys_cmd, commands, AppDelegate, AppLauncher, Color, Command, Data, DelegateCtx,
-    Env, Event, EventCtx, FileDialogOptions, FontDescriptor, FontFamily, Handled, ImageBuf, Lens,
-    LocalizedString, Menu, MenuItem, Point, Rect, Screen, Size, Target, TextAlignment, UnitPoint,
-    Vec2, Widget, WidgetExt, WidgetId, WindowDesc, WindowId, WindowState,
+    commands as sys_cmd, commands, AppDelegate, AppLauncher, Code, Color, Command, Data,
+    DelegateCtx, Env, Event, EventCtx, FileDialogOptions, FontDescriptor, FontFamily, Handled,
+    ImageBuf, Lens, LocalizedString, Menu, MenuItem, Point, Rect, Screen, Size, Target,
+    TextAlignment, UnitPoint, Vec2, Widget, WidgetExt, WidgetId, WindowDesc, WindowId, WindowState,
 };
 use image::io::Reader;
 use random_string::generate;
 use std::collections::HashSet;
 use std::path::Path;
-use std::process::exit;
+use std::str::FromStr;
+use std::string::ToString;
 use std::sync::Arc;
 
 const STARTING_IMG_PATH: &'static str = "./src/images/starting_img.png";
 
 lazy_static::lazy_static! {
-static ref SCREENSHOT_WIDGET_ID: WidgetId = WidgetId::next();
-static ref ZSTACK_ID: WidgetId = WidgetId::next();
+    static ref SCREENSHOT_WIDGET_ID: WidgetId = WidgetId::next();
+    static ref ZSTACK_ID: WidgetId = WidgetId::next();
 }
 
 const WINDOW_TITLE: LocalizedString<AppState> = LocalizedString::new("Screen Grabbing Application");
@@ -36,7 +36,10 @@ const Y0: f64 = 0.;
 const X1: f64 = 500.;
 const Y1: f64 = 500.;
 
-const BASE_PATH_CONSTANT: &str = "./src/screenshots/";
+const BASE_PATH: &str = "./src/";
+const BASE_PATH_SCREENSHOT: &str = "./src/screenshots/";
+const BASE_PATH_FAVORITE_SHORTCUT: &str = "./src/shortcut/";
+const PATH_FAVORITE_SHORTCUT: &str = "./src/shortcut/shortcut_settings.json";
 
 #[derive(Clone, PartialEq)]
 enum ImageModified {
@@ -77,23 +80,16 @@ struct AppState {
     text_field_zstack: bool,
     text_field: String,
     crop_screenshot_enabled: bool,
-    rename_file_enabled: bool
+    rename_file_enabled: bool,
 }
 
 fn main() {
     // Verify if the screenshot dir exists
-    if std::fs::metadata(BASE_PATH_CONSTANT).is_ok()
-        && std::fs::metadata(BASE_PATH_CONSTANT).unwrap().is_dir()
-    {
-    } else {
-        match std::fs::create_dir(BASE_PATH_CONSTANT) {
-            Ok(_) => {}
-            Err(_) => {
-                println!("Error during the creation of the screenshots directory, please create it manually!");
-                exit(1);
-            }
-        }
-    }
+    verify_exists_dir(BASE_PATH);
+    verify_exists_dir(BASE_PATH_SCREENSHOT);
+    verify_exists_dir(BASE_PATH_FAVORITE_SHORTCUT);
+
+    let default_shortcut: HashSet<Code> = HashSet::<Code>::from([Code::KeyB, Code::KeyA]);
 
     let main_window = WindowDesc::new(build_root_widget())
         .title("Welcome!")
@@ -103,7 +99,7 @@ fn main() {
         .set_position((50., 20.));
 
     // create the initial app state
-    let initial_state = AppState {
+    let mut initial_state = AppState {
         rect: Rect {
             x0: X0,
             y0: Y0,
@@ -121,21 +117,40 @@ fn main() {
         color: None,
         colors_window_opened: None,
         state: State::Start,
-        base_path: BASE_PATH_CONSTANT.to_string(),
+        base_path: BASE_PATH_SCREENSHOT.to_string(),
         alert: Alert {
             alert_visible: false,
             alert_message: "".to_string(),
         },
         shortcut_keys: ShortcutKeys {
-            favorite_hot_keys: HashSet::<Code>::from([Code::KeyB, Code::KeyA]),
+            favorite_hot_keys: default_shortcut.clone(),
             pressed_hot_keys: HashSet::new(),
             state: StateShortcutKeys::NotBusy,
         },
         text_field_zstack: true,
         text_field: "".to_string(),
         crop_screenshot_enabled: false,
-        rename_file_enabled: false
+        rename_file_enabled: false,
     };
+
+    // Reading and deserialization from file to set the favourite shortcut
+    if let Some(deserialized) = read_from_file::<HashSet<String>>(PATH_FAVORITE_SHORTCUT) {
+        let mut convert_code = HashSet::<Code>::new();
+        for code in deserialized {
+            match Code::from_str(code.as_str()) {
+                Ok(code_deserialized) => {
+                    convert_code.insert(code_deserialized);
+                }
+                Err(_) => {
+                    convert_code = default_shortcut.clone();
+                    break;
+                }
+            }
+        }
+        initial_state.shortcut_keys.favorite_hot_keys = convert_code;
+    } else {
+        initial_state.shortcut_keys.favorite_hot_keys = default_shortcut.clone();
+    }
 
     let delegate = Delegate;
 
@@ -145,6 +160,7 @@ fn main() {
         .launch(initial_state)
         .expect("Failed to launch application");
 }
+
 struct Delegate;
 
 impl AppDelegate<AppState> for Delegate {
@@ -166,26 +182,60 @@ impl AppDelegate<AppState> for Delegate {
                     if data.shortcut_keys.pressed_hot_keys
                         == HashSet::from([Code::ControlLeft, Code::KeyC])
                         || data.shortcut_keys.pressed_hot_keys == HashSet::from([Code::Escape])
+                        || data.shortcut_keys.pressed_hot_keys
+                            == HashSet::from([Code::ControlLeft, Code::KeyW])
                     {
-                        // ctrl + c : this is reserved for the copy shortcut, Esc is reserved to close the screen window
+                        // ctrl + c : this is reserved for the copy shortcut, Esc is reserved to close the subwindows and ctrl + w is reserved to close the main window
                         data.shortcut_keys.state = StateShortcutKeys::ShortcutNotAvailable;
                     } else {
                         data.shortcut_keys.favorite_hot_keys =
                             data.shortcut_keys.pressed_hot_keys.clone();
                         data.shortcut_keys.state = StateShortcutKeys::NotBusy;
                         data.shortcut_keys.pressed_hot_keys = HashSet::new();
+
+                        let mut convert_code = HashSet::<String>::new();
+                        for code in data.shortcut_keys.favorite_hot_keys.clone() {
+                            convert_code.insert(code.to_string());
+                        }
+
+                        match write_to_file(PATH_FAVORITE_SHORTCUT, &convert_code) {
+                            Ok(_) => data
+                                .alert
+                                .show_alert("Favorite Shortcut saved successfully!"),
+                            Err(_) => data
+                                .alert
+                                .show_alert("Error during writing to the shortcut settings file!"),
+                        }
                     }
                 } else if data.shortcut_keys.pressed_hot_keys == HashSet::from([Code::Escape]) {
+                    data.shortcut_keys.pressed_hot_keys = HashSet::new(); // clean map
+                    data.shortcut_keys.state = StateShortcutKeys::NotBusy; // it has finished its job
+
                     // Key Escape has been pressed
                     if let Some(main_id) = data.main_window_id {
-                        data.shortcut_keys.pressed_hot_keys = HashSet::new(); // clean map
-                        data.shortcut_keys.state = StateShortcutKeys::NotBusy; // it has finished its job
-
                         ctx.get_external_handle()
                             .submit_command(sys_cmd::SHOW_WINDOW, (), main_id)
                             .expect("Error sending the event");
+
+                        if main_id != window_id {
+                            ctx.submit_command(sys_cmd::CLOSE_WINDOW.to(Target::Window(window_id)));
+                        }
                     }
-                    ctx.submit_command(sys_cmd::CLOSE_WINDOW.to(Target::Window(window_id)));
+                } else if data.shortcut_keys.pressed_hot_keys
+                    == HashSet::from([Code::ControlLeft, Code::KeyW])
+                {
+                    data.shortcut_keys.state = StateShortcutKeys::NotBusy; // it has finished its job
+
+                    // Keys ctrl + w has been pressed
+                    if let Some(main_id) = data.main_window_id {
+                        data.shortcut_keys.pressed_hot_keys = HashSet::new(); // clean map
+
+                        if main_id == window_id {
+                            ctx.submit_command(sys_cmd::CLOSE_WINDOW.to(Target::Window(main_id)));
+                        }
+                    } else {
+                        ctx.submit_command(sys_cmd::CLOSE_WINDOW.to(Target::Window(window_id)));
+                    }
                 } else if data.shortcut_keys.pressed_hot_keys.len()
                     == data.shortcut_keys.favorite_hot_keys.len()
                     && data.shortcut_keys.pressed_hot_keys == data.shortcut_keys.favorite_hot_keys
@@ -210,6 +260,7 @@ impl AppDelegate<AppState> for Delegate {
                             .transparent(true)
                             .resizable(false)
                             .show_titlebar(false)
+                            .window_size((monitor.virtual_rect().x1, monitor.virtual_rect().y1))
                             .set_window_state(WindowState::Maximized)
                             .set_position(monitor.virtual_rect().origin()),
                     );
@@ -276,9 +327,9 @@ impl AppDelegate<AppState> for Delegate {
                 .transparent(true)
                 .resizable(true)
                 .show_titlebar(true)
-                .window_size((400., 200.))
+                .window_size((500., 460.))
                 .set_position(monitor.virtual_rect().origin())
-                .with_min_size(Size::new(450., 300.));
+                .with_min_size(Size::new(500., 450.));
 
             ctx.new_window(window_shortcut);
         }
@@ -311,6 +362,53 @@ fn build_shortcut_keys_widget() -> impl Widget<AppState> {
         .border(Color::RED, 0.7)
         .rounded(5.)
         .align_horizontal(UnitPoint::CENTER);
+
+    let shortcut_keys_not_available = Flex::column()
+        .with_child(
+            Label::new("Reserved Combinations")
+                .with_text_color(Color::RED)
+                .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
+                .with_text_size(19.)
+                .padding(5.),
+        )
+        .with_child(
+            Label::new("Ctrl + C: Copy")
+                .with_text_color(Color::BLUE)
+                .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
+                .with_text_size(15.)
+                .padding(5.),
+        )
+        .with_child(
+            Label::new("Ctrl + W: Close the main window")
+                .with_text_color(Color::BLUE)
+                .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
+                .with_text_size(15.)
+                .padding(5.),
+        )
+        .with_child(
+            Label::new("Esc: Close the subwindow")
+                .with_text_color(Color::BLUE)
+                .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
+                .with_text_size(15.)
+                .padding(5.),
+        )
+        .with_child(
+            Label::new("Note: The 'Esc' key will be disabled if no images are")
+                .with_text_color(Color::BLUE)
+                .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
+                .with_text_size(10.)
+                .padding(10.),
+        )
+        .with_child(
+            Label::new("captured, and you can use 'Ctrl + W' to close the subwindow.")
+                .with_text_color(Color::BLUE)
+                .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
+                .with_text_size(10.),
+        )
+        .padding(10.)
+        .border(Color::RED, 0.7)
+        .rounded(5.)
+        .align_horizontal(UnitPoint::LEFT);
 
     let flex_default = Flex::row()
         .cross_axis_alignment(CrossAxisAlignment::Center)
@@ -364,7 +462,9 @@ fn build_shortcut_keys_widget() -> impl Widget<AppState> {
                         .on_click(|_ctx, data: &mut AppState, _| {
                             data.shortcut_keys.state = StateShortcutKeys::SetFavoriteShortcut;
                         }),
-                ),
+                )
+                .with_default_spacer()
+                .with_child(shortcut_keys_not_available),
         );
     let container_default = Container::new(flex_default)
         .background(Color::WHITE)
@@ -428,7 +528,10 @@ fn build_screenshot_widget(monitor: usize) -> impl Widget<AppState> {
     .with_color(Color::rgb8(70, 250, 70).with_alpha(1.))
     .on_click(|ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
         data.shortcut_keys.state = StateShortcutKeys::NotBusy; // reset of shortcut state
+
+        data.name = "".to_string(); // reset name file
         let (base_path, name) = file_name(data.name.clone(), data.base_path.clone());
+        data.name = (*name.clone()).to_string();
 
         ctx.submit_command(
             SAVE_SCREENSHOT
@@ -503,7 +606,6 @@ fn build_screenshot_widget(monitor: usize) -> impl Widget<AppState> {
 
 fn build_screenshot_crop_widget(monitor: usize) -> impl Widget<AppState> {
     let rectangle = LensWrap::new(SelectedRect::new(monitor), AppState::rect);
-
     Container::new(rectangle)
 }
 
@@ -547,8 +649,9 @@ fn build_root_widget() -> impl Widget<AppState> {
                     .transparent(true)
                     .resizable(false)
                     .show_titlebar(false)
-                    .set_window_state(WindowState::Maximized)
-                    .set_position(monitor.virtual_rect().origin()),
+                    .set_position(monitor.virtual_rect().origin())
+                    .window_size((monitor.virtual_rect().x1, monitor.virtual_rect().y1))
+                    .set_window_state(WindowState::Maximized),
             );
 
             ctx.submit_command(
@@ -649,7 +752,10 @@ fn build_root_widget() -> impl Widget<AppState> {
     });
 
     let spaced_zstack = Either::new(
-        |data: &AppState, _env| data.crop_screenshot_enabled == true,
+        |data: &AppState, _env| {
+            data.state == State::ScreenTaken(ImageModified::Savable)
+                && data.crop_screenshot_enabled == true
+        },
         ZStack::new(zstack_crop)
             .with_child(
                 build_screenshot_crop_widget(0),
@@ -662,12 +768,11 @@ fn build_root_widget() -> impl Widget<AppState> {
         Container::new(zstack).padding((10.0, 10.0)),
     );
 
-    let crop_screenshot_button = TakeScreenshotButton::from_label(Label::new("Save"))
+    let crop_screenshot_save_button = TakeScreenshotButton::from_label(Label::new("Update Image"))
         .with_color(Color::rgb8(0, 150, 0).with_alpha(1.))
         .on_click(|ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
             let (base_path, name) = file_name(data.name.clone(), data.base_path.clone());
             data.name = (*name.clone()).to_string();
-            data.alert.show_alert("The image has been saved on the disk!");
 
             ctx.submit_command(
                 UPDATE_SCREENSHOT_CROP
@@ -688,15 +793,21 @@ fn build_root_widget() -> impl Widget<AppState> {
             data.shortcut_keys.state = StateShortcutKeys::NotBusy; // reset of shortcut state
             data.shortcut_keys.pressed_hot_keys = HashSet::new(); // clean map
 
+            data.alert
+                .show_alert("The image has been saved on the disk!");
+
             data.state = State::ScreenTaken(ImageModified::NotSavable);
         });
 
-    let close_crop_screenshop_button = ColoredButton::from_label(Label::new("Close"))
+    let close_crop_screenshop_button = ColoredButton::from_label(Label::new("Cancel"))
         .with_color(Color::rgb8(150, 0, 0).with_alpha(1.))
         .on_click(|ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
             data.crop_screenshot_enabled = false; // disable the crop screenshot widget
+            data.state = State::ScreenTaken(ImageModified::NotSavable);
 
-            ctx.submit_command(UPDATE_SCREENSHOT_CROP_CLOSE.to(Target::Widget(*SCREENSHOT_WIDGET_ID)));
+            ctx.submit_command(
+                UPDATE_SCREENSHOT_CROP_CLOSE.to(Target::Widget(*SCREENSHOT_WIDGET_ID)),
+            );
 
             data.shortcut_keys.pressed_hot_keys = HashSet::new(); // clean map
             data.shortcut_keys.state = StateShortcutKeys::NotBusy; // it has finished its job
@@ -708,7 +819,7 @@ fn build_root_widget() -> impl Widget<AppState> {
                 .with_text_color(Color::BLACK)
                 .padding(2.),
         )
-        .with_child(crop_screenshot_button)
+        .with_child(crop_screenshot_save_button)
         .with_default_spacer()
         .with_child(close_crop_screenshop_button);
 
@@ -727,10 +838,18 @@ fn build_root_widget() -> impl Widget<AppState> {
                     data.shortcut_keys.pressed_hot_keys = HashSet::new(); // clean map
 
                     data.crop_screenshot_enabled = true;
+                    data.state = State::ScreenTaken(ImageModified::Savable);
                 }),
-            buttons_crop_screenshot_flex,
+            Label::new(""),
         ),
-        Label::new(""),
+        Either::new(
+            |data: &AppState, _env| {
+                data.state == State::ScreenTaken(ImageModified::Savable)
+                    && data.crop_screenshot_enabled == true
+            },
+            buttons_crop_screenshot_flex,
+            Label::new(""),
+        ),
     );
 
     let name_selector = Either::new(
@@ -866,10 +985,7 @@ fn build_root_widget() -> impl Widget<AppState> {
     );
 
     let circle_button = Either::new(
-        |data: &AppState, _env| {
-            data.state == State::ScreenTaken(ImageModified::NotSavable)
-                && data.crop_screenshot_enabled == false
-        },
+        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::NotSavable),
         Button::from_label(Label::new("⭕")).on_click(
             move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
                 ctx.submit_command(
@@ -884,10 +1000,7 @@ fn build_root_widget() -> impl Widget<AppState> {
     );
 
     let triangle_button = Either::new(
-        |data: &AppState, _env| {
-            data.state == State::ScreenTaken(ImageModified::NotSavable)
-                && data.crop_screenshot_enabled == false
-        },
+        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::NotSavable),
         Button::from_label(Label::new("△")).on_click(
             move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
                 ctx.submit_command(
@@ -901,10 +1014,7 @@ fn build_root_widget() -> impl Widget<AppState> {
         Label::new(""),
     );
     let arrow_button = Either::new(
-        |data: &AppState, _env| {
-            data.state == State::ScreenTaken(ImageModified::NotSavable)
-                && data.crop_screenshot_enabled == false
-        },
+        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::NotSavable),
         Button::from_label(Label::new("→")).on_click(
             move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
                 ctx.submit_command(
@@ -918,10 +1028,7 @@ fn build_root_widget() -> impl Widget<AppState> {
         Label::new(""),
     );
     let highlighter_button = Either::new(
-        |data: &AppState, _env| {
-            data.state == State::ScreenTaken(ImageModified::NotSavable)
-                && data.crop_screenshot_enabled == false
-        },
+        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::NotSavable),
         Button::from_label(Label::new("⎚")).on_click(
             move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
                 ctx.submit_command(
@@ -939,7 +1046,6 @@ fn build_root_widget() -> impl Widget<AppState> {
         |data: &AppState, _| {
             data.text_field_zstack == true
                 && data.state == State::ScreenTaken(ImageModified::NotSavable)
-                && data.crop_screenshot_enabled == false
         },
         Flex::row()
             .with_child(
@@ -978,10 +1084,7 @@ fn build_root_widget() -> impl Widget<AppState> {
     );
 
     let text_button = Either::new(
-        |data: &AppState, _env| {
-            data.state == State::ScreenTaken(ImageModified::NotSavable)
-                && data.crop_screenshot_enabled == false
-        },
+        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::NotSavable),
         Button::from_label(Label::new("Text")).on_click(
             move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
                 data.text_field_zstack = true;
@@ -992,10 +1095,7 @@ fn build_root_widget() -> impl Widget<AppState> {
     );
 
     let colors_button = Either::new(
-        |data: &AppState, _env| {
-            data.state == State::ScreenTaken(ImageModified::NotSavable)
-                && data.crop_screenshot_enabled == false
-        },
+        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::NotSavable),
         ColoredButton::from_label(Label::new("Color"))
             .with_color(Color::PURPLE)
             .on_click(move |ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
@@ -1060,7 +1160,10 @@ fn build_root_widget() -> impl Widget<AppState> {
         Label::new(""),
     );
     let save_button = Either::new(
-        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::Savable),
+        |data: &AppState, _env| {
+            data.state == State::ScreenTaken(ImageModified::Savable)
+                && data.crop_screenshot_enabled == false
+        },
         Either::new(
             |data: &AppState, _env| data.rename_file_enabled == false,
             ColoredButton::from_label(Label::new("Save"))
@@ -1104,11 +1207,8 @@ fn build_root_widget() -> impl Widget<AppState> {
     })
     .with_text_color(Color::BLACK.with_alpha(0.85));
 
-    let save_button_later = Either::new(
-        |data: &AppState, _env| {
-            data.state == State::ScreenTaken(ImageModified::NotSavable)
-                && data.crop_screenshot_enabled == false
-        },
+    /*let save_button_later = Either::new(
+        |data: &AppState, _env| data.state == State::ScreenTaken(ImageModified::NotSavable),
         ColoredButton::from_label(Label::new("Change Name Image"))
             .with_color(Color::rgb(0., 120. / 256., 0.))
             .on_click(
@@ -1117,6 +1217,12 @@ fn build_root_widget() -> impl Widget<AppState> {
                     data.state = State::ScreenTaken(ImageModified::Savable);
                 },
             ),
+        Label::new(""),
+    );*/
+
+    let screen_selector_label = Either::new(
+        |data: &AppState, _env| data.crop_screenshot_enabled == false,
+        Label::new("Select Screen:").with_text_color(Color::BLACK.with_alpha(0.85)),
         Label::new(""),
     );
 
@@ -1173,18 +1279,14 @@ fn build_root_widget() -> impl Widget<AppState> {
         .with_child(extension_selector)
         .with_default_spacer()
         .with_child(save_button)
-        .with_default_spacer()
-        .with_child(save_button_later)
+        //.with_default_spacer()
+        //.with_child(save_button_later)
         .with_default_spacer()
         .with_child(Container::new(crop_screenshot_button))
         .with_default_spacer()
         .with_flex_child(Container::new(take_screenshot_button), 1.0)
         .with_default_spacer()
-        .with_child(Either::new(
-            |data: &AppState, _env| data.crop_screenshot_enabled == false,
-            Label::new("Select Screen:").with_text_color(Color::BLACK.with_alpha(0.85)),
-            Label::new(""),
-        ))
+        .with_child(screen_selector_label)
         .with_default_spacer()
         .with_child(screen_selector);
 

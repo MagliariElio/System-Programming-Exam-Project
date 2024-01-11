@@ -4,7 +4,8 @@ use druid::piet::ImageFormat;
 use druid::widget::FillStrat;
 use image::DynamicImage;
 use tracing::{instrument, trace};
-use crate::custom_widget::{UPDATE_BACK_IMG, UPDATE_RECT_SIZE};
+use crate::BASE_PATH_SCREENSHOT;
+use crate::custom_widget::{UPDATE_BACK_IMG, UPDATE_RECT_SIZE, verify_exists_dir};
 
 pub const UPDATE_SCREENSHOT: Selector<Arc<DynamicImage>> = Selector::new("Update the screenshot image");
 pub const UPDATE_SCREENSHOT_CROP: Selector<(Rect, Box<str>, Box<str>, image::ImageFormat, WidgetId)> = Selector::new("Update the screenshot image cropped");
@@ -183,6 +184,9 @@ impl<T: Data> Widget<T> for ScreenshotImage {
                         img_resized.width() as usize,
                         img_resized.height() as usize,
                     ));
+
+                    // it verify if exists the dir before saving the image
+                    verify_exists_dir(BASE_PATH_SCREENSHOT);
 
                     let path = format!("{}{}.{}", path, file_name, file_format.extensions_str().first().unwrap());
                     img_resized.save_with_format(path.clone(), *file_format).unwrap();

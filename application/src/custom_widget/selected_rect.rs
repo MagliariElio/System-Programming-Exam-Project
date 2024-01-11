@@ -42,8 +42,8 @@ impl SelectedRect {
             .virtual_rect();
 
         let rect = Rect {
-            x0: 1.,
-            y0: 1.,
+            x0: 0.,
+            y0: 0.,
             x1: primary_monitor_rect.width(),
             y1: primary_monitor_rect.height()
         };
@@ -97,7 +97,7 @@ impl SelectedRect {
             y1: rect.height(),
         };
         self.rect = rect_updated;
-        self.mouse =  IfMousePressedWhere::NotInterested;
+        self.mouse = IfMousePressedWhere::NotInterested;
         self.show_overlay = false;
         self.fix_rect = rect_updated;
     }
@@ -202,6 +202,7 @@ impl Widget<Rect> for SelectedRect {
             }
             _ => (),
         }
+
         //Keeps validity
         while self.rect.x1 <= self.rect.x0 + BORDER_WIDTH {
             self.rect.x1 += 1. + BORDER_WIDTH;
