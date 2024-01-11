@@ -201,7 +201,7 @@ impl AppDelegate<AppState> for Delegate {
                         match write_to_file(PATH_FAVORITE_SHORTCUT, &convert_code) {
                             Ok(_) => data
                                 .alert
-                                .show_alert("Favorite Shortcut saved successfully!"),
+                                .show_alert("Favorite Shortcut Saved Successfully!"),
                             Err(_) => data
                                 .alert
                                 .show_alert("Error during writing to the shortcut settings file!"),
@@ -530,7 +530,9 @@ fn build_screenshot_widget(monitor: usize) -> impl Widget<AppState> {
     .on_click(|ctx: &mut EventCtx, data: &mut AppState, _env: &Env| {
         data.shortcut_keys.state = StateShortcutKeys::NotBusy; // reset of shortcut state
 
-        data.name = "".to_string(); // reset name file
+        if data.state != State::Start {
+            data.name = "".to_string(); // reset name file
+        }
         let (base_path, name) = file_name(data.name.clone(), data.base_path.clone());
         data.name = (*name.clone()).to_string();
 
