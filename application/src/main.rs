@@ -171,8 +171,9 @@ impl AppDelegate<AppState> for Delegate {
                     if data.shortcut_keys.pressed_hot_keys
                         == HashSet::from([Code::ControlLeft, Code::KeyC])
                         || data.shortcut_keys.pressed_hot_keys == HashSet::from([Code::Escape])
+                        || data.shortcut_keys.pressed_hot_keys == HashSet::from([Code::ControlLeft, Code::KeyW])
                     {
-                        // ctrl + c : this is reserved for the copy shortcut, Esc is reserved to close the screen window
+                        // ctrl + c : this is reserved for the copy shortcut, Esc is reserved to close the subwindows and ctrl + w is reserved to close the main window
                         data.shortcut_keys.state = StateShortcutKeys::ShortcutNotAvailable;
                     } else {
                         data.shortcut_keys.favorite_hot_keys =
@@ -181,16 +182,32 @@ impl AppDelegate<AppState> for Delegate {
                         data.shortcut_keys.pressed_hot_keys = HashSet::new();
                     }
                 } else if data.shortcut_keys.pressed_hot_keys == HashSet::from([Code::Escape]) {
+                    data.shortcut_keys.pressed_hot_keys = HashSet::new(); // clean map
+                    data.shortcut_keys.state = StateShortcutKeys::NotBusy; // it has finished its job
+
                     // Key Escape has been pressed
                     if let Some(main_id) = data.main_window_id {
-                        data.shortcut_keys.pressed_hot_keys = HashSet::new(); // clean map
-                        data.shortcut_keys.state = StateShortcutKeys::NotBusy; // it has finished its job
-
                         ctx.get_external_handle()
                             .submit_command(sys_cmd::SHOW_WINDOW, (), main_id)
                             .expect("Error sending the event");
+
+                        if main_id != window_id {
+                            ctx.submit_command(sys_cmd::CLOSE_WINDOW.to(Target::Window(window_id)));
+                        }
                     }
-                    ctx.submit_command(sys_cmd::CLOSE_WINDOW.to(Target::Window(window_id)));
+                } else if data.shortcut_keys.pressed_hot_keys == HashSet::from([Code::ControlLeft, Code::KeyW]) {
+                    data.shortcut_keys.state = StateShortcutKeys::NotBusy; // it has finished its job
+
+                    // Keys ctrl + w has been pressed
+                    if let Some(main_id) = data.main_window_id {
+                        data.shortcut_keys.pressed_hot_keys = HashSet::new(); // clean map
+
+                        if main_id == window_id {
+                            ctx.submit_command(sys_cmd::CLOSE_WINDOW.to(Target::Window(main_id)));
+                        }
+                    } else {
+                        ctx.submit_command(sys_cmd::CLOSE_WINDOW.to(Target::Window(window_id)));
+                    }
                 } else if data.shortcut_keys.pressed_hot_keys.len()
                     == data.shortcut_keys.favorite_hot_keys.len()
                     && data.shortcut_keys.pressed_hot_keys == data.shortcut_keys.favorite_hot_keys
@@ -282,9 +299,9 @@ impl AppDelegate<AppState> for Delegate {
                 .transparent(true)
                 .resizable(true)
                 .show_titlebar(true)
-                .window_size((400., 200.))
+                .window_size((500., 460.))
                 .set_position(monitor.virtual_rect().origin())
-                .with_min_size(Size::new(450., 300.));
+                .with_min_size(Size::new(500., 450.));
 
             ctx.new_window(window_shortcut);
         }
@@ -317,6 +334,47 @@ fn build_shortcut_keys_widget() -> impl Widget<AppState> {
         .border(Color::RED, 0.7)
         .rounded(5.)
         .align_horizontal(UnitPoint::CENTER);
+
+    let shortcut_keys_not_available = Flex::column()
+        .with_child(Label::new("Reserved Combinations")
+            .with_text_color(Color::RED)
+            .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
+            .with_text_size(19.)
+            .padding(5.)
+        )
+        .with_child(Label::new("Ctrl + C: Copy")
+            .with_text_color(Color::BLUE)
+            .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
+            .with_text_size(15.)
+            .padding(5.)
+        )
+        .with_child(Label::new("Ctrl + W: Close the main window")
+            .with_text_color(Color::BLUE)
+            .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
+            .with_text_size(15.)
+            .padding(5.)
+        )
+        .with_child(Label::new("Esc: Close the subwindow")
+            .with_text_color(Color::BLUE)
+            .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
+            .with_text_size(15.)
+            .padding(5.)
+        )
+        .with_child(Label::new("Note: The 'Esc' key will be disabled if no images are")
+            .with_text_color(Color::BLUE)
+            .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
+            .with_text_size(10.)
+            .padding(10.)
+        )
+        .with_child(Label::new("captured, and you can use 'Ctrl + W' to close the subwindow.")
+            .with_text_color(Color::BLUE)
+            .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
+            .with_text_size(10.)
+        )
+        .padding(10.)
+        .border(Color::RED, 0.7)
+        .rounded(5.)
+        .align_horizontal(UnitPoint::LEFT);
 
     let flex_default = Flex::row()
         .cross_axis_alignment(CrossAxisAlignment::Center)
@@ -370,7 +428,9 @@ fn build_shortcut_keys_widget() -> impl Widget<AppState> {
                         .on_click(|_ctx, data: &mut AppState, _| {
                             data.shortcut_keys.state = StateShortcutKeys::SetFavoriteShortcut;
                         }),
-                ),
+                )
+                .with_default_spacer()
+                .with_child(shortcut_keys_not_available)
         );
     let container_default = Container::new(flex_default)
         .background(Color::WHITE)
