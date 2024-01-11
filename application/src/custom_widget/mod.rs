@@ -17,5 +17,5 @@ pub use take_screenshot_button::{TakeScreenshotButton,SAVE_SCREENSHOT};
 pub use resizable_box::{ResizableBox,UPDATE_ORIGIN};
 pub use custom_slider::CustomSlider;
 pub use alert::{Alert};
-pub use shortcut_keys::{ShortcutKeys, StateShortcutKeys, SHORTCUT_KEYS};
+pub use shortcut_keys::{ShortcutKeys, StateShortcutKeys, SHORTCUT_KEYS, read_from_file, write_to_file, verify_exists_dir};
 

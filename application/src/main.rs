@@ -1,13 +1,7 @@
 mod custom_widget;
 
-use crate::custom_widget::{
-    Alert, ColoredButton, CustomSlider, CustomZStack, OverImages, ScreenshotImage, SelectedRect,
-    ShortcutKeys, StateShortcutKeys, TakeScreenshotButton, CREATE_ZSTACK, SAVE_OVER_IMG,
-    SAVE_SCREENSHOT, SHORTCUT_KEYS, SHOW_OVER_IMG, UPDATE_BACK_IMG, UPDATE_COLOR, UPDATE_RECT_SIZE,
-    UPDATE_SCREENSHOT_CROP, UPDATE_SCREENSHOT_CROP_CLOSE,
-};
+use crate::custom_widget::{read_from_file, write_to_file, Alert, ColoredButton, CustomSlider, CustomZStack, OverImages, ScreenshotImage, SelectedRect, ShortcutKeys, StateShortcutKeys, TakeScreenshotButton, CREATE_ZSTACK, SAVE_OVER_IMG, SAVE_SCREENSHOT, SHORTCUT_KEYS, SHOW_OVER_IMG, UPDATE_BACK_IMG, UPDATE_COLOR, UPDATE_RECT_SIZE, UPDATE_SCREENSHOT_CROP, UPDATE_SCREENSHOT_CROP_CLOSE, verify_exists_dir};
 use druid::commands::SHOW_ABOUT;
-use druid::keyboard_types::Code;
 use druid::piet::ImageFormat;
 use druid::widget::{
     Align, Button, Click, Container, ControllerHost, CrossAxisAlignment, Either, FillStrat, Flex,
@@ -16,23 +10,24 @@ use druid::widget::{
 };
 use druid::Target::{Auto, Window};
 use druid::{
-    commands as sys_cmd, commands, AppDelegate, AppLauncher, Color, Command, Data, DelegateCtx,
-    Env, Event, EventCtx, FileDialogOptions, FontDescriptor, FontFamily, Handled, ImageBuf, Lens,
-    LocalizedString, Menu, MenuItem, Point, Rect, Screen, Size, Target, TextAlignment, UnitPoint,
-    Vec2, Widget, WidgetExt, WidgetId, WindowDesc, WindowId, WindowState,
+    commands as sys_cmd, commands, AppDelegate, AppLauncher, Code, Color, Command, Data,
+    DelegateCtx, Env, Event, EventCtx, FileDialogOptions, FontDescriptor, FontFamily, Handled,
+    ImageBuf, Lens, LocalizedString, Menu, MenuItem, Point, Rect, Screen, Size, Target,
+    TextAlignment, UnitPoint, Vec2, Widget, WidgetExt, WidgetId, WindowDesc, WindowId, WindowState,
 };
 use image::io::Reader;
 use random_string::generate;
 use std::collections::HashSet;
 use std::path::Path;
-use std::process::exit;
+use std::str::FromStr;
+use std::string::ToString;
 use std::sync::Arc;
 
 const STARTING_IMG_PATH: &'static str = "./src/images/starting_img.png";
 
 lazy_static::lazy_static! {
-static ref SCREENSHOT_WIDGET_ID: WidgetId = WidgetId::next();
-static ref ZSTACK_ID: WidgetId = WidgetId::next();
+    static ref SCREENSHOT_WIDGET_ID: WidgetId = WidgetId::next();
+    static ref ZSTACK_ID: WidgetId = WidgetId::next();
 }
 
 const WINDOW_TITLE: LocalizedString<AppState> = LocalizedString::new("Screen Grabbing Application");
@@ -41,7 +36,9 @@ const Y0: f64 = 0.;
 const X1: f64 = 500.;
 const Y1: f64 = 500.;
 
-const BASE_PATH_CONSTANT: &str = "./src/screenshots/";
+const BASE_PATH_SCREENSHOT: &str = "./src/screenshots/";
+const BASE_PATH_FAVORITE_SHORTCUT: &str = "./src/shortcut/";
+const PATH_FAVORITE_SHORTCUT: &str = "./src/shortcut/shortcut_settings.json";
 
 #[derive(Clone, PartialEq)]
 enum ImageModified {
@@ -87,18 +84,10 @@ struct AppState {
 
 fn main() {
     // Verify if the screenshot dir exists
-    if std::fs::metadata(BASE_PATH_CONSTANT).is_ok()
-        && std::fs::metadata(BASE_PATH_CONSTANT).unwrap().is_dir()
-    {
-    } else {
-        match std::fs::create_dir(BASE_PATH_CONSTANT) {
-            Ok(_) => {}
-            Err(_) => {
-                println!("Error during the creation of the screenshots directory, please create it manually!");
-                exit(1);
-            }
-        }
-    }
+    verify_exists_dir(BASE_PATH_SCREENSHOT);
+    verify_exists_dir(BASE_PATH_FAVORITE_SHORTCUT);
+
+    let default_shortcut: HashSet<Code> = HashSet::<Code>::from([Code::KeyB, Code::KeyA]);
 
     let main_window = WindowDesc::new(build_root_widget())
         .title("Welcome!")
@@ -108,7 +97,7 @@ fn main() {
         .set_position((50., 20.));
 
     // create the initial app state
-    let initial_state = AppState {
+    let mut initial_state = AppState {
         rect: Rect {
             x0: X0,
             y0: Y0,
@@ -126,13 +115,13 @@ fn main() {
         color: None,
         colors_window_opened: None,
         state: State::Start,
-        base_path: BASE_PATH_CONSTANT.to_string(),
+        base_path: BASE_PATH_SCREENSHOT.to_string(),
         alert: Alert {
             alert_visible: false,
             alert_message: "".to_string(),
         },
         shortcut_keys: ShortcutKeys {
-            favorite_hot_keys: HashSet::<Code>::from([Code::KeyB, Code::KeyA]),
+            favorite_hot_keys: default_shortcut.clone(),
             pressed_hot_keys: HashSet::new(),
             state: StateShortcutKeys::NotBusy,
         },
@@ -142,6 +131,25 @@ fn main() {
         rename_file_enabled: false,
     };
 
+    // Reading and deserialization from file to set the favourite shortcut
+    if let Some(deserialized) = read_from_file::<HashSet<String>>(PATH_FAVORITE_SHORTCUT) {
+        let mut convert_code = HashSet::<Code>::new();
+        for code in deserialized {
+            match Code::from_str(code.as_str()) {
+                Ok(code_deserialized) => {
+                    convert_code.insert(code_deserialized);
+                }
+                Err(_) => {
+                    convert_code = default_shortcut.clone();
+                    break;
+                }
+            }
+        }
+        initial_state.shortcut_keys.favorite_hot_keys = convert_code;
+    } else {
+        initial_state.shortcut_keys.favorite_hot_keys = default_shortcut.clone();
+    }
+
     let delegate = Delegate;
 
     // start the application
@@ -150,6 +158,7 @@ fn main() {
         .launch(initial_state)
         .expect("Failed to launch application");
 }
+
 struct Delegate;
 
 impl AppDelegate<AppState> for Delegate {
@@ -171,7 +180,8 @@ impl AppDelegate<AppState> for Delegate {
                     if data.shortcut_keys.pressed_hot_keys
                         == HashSet::from([Code::ControlLeft, Code::KeyC])
                         || data.shortcut_keys.pressed_hot_keys == HashSet::from([Code::Escape])
-                        || data.shortcut_keys.pressed_hot_keys == HashSet::from([Code::ControlLeft, Code::KeyW])
+                        || data.shortcut_keys.pressed_hot_keys
+                            == HashSet::from([Code::ControlLeft, Code::KeyW])
                     {
                         // ctrl + c : this is reserved for the copy shortcut, Esc is reserved to close the subwindows and ctrl + w is reserved to close the main window
                         data.shortcut_keys.state = StateShortcutKeys::ShortcutNotAvailable;
@@ -180,6 +190,20 @@ impl AppDelegate<AppState> for Delegate {
                             data.shortcut_keys.pressed_hot_keys.clone();
                         data.shortcut_keys.state = StateShortcutKeys::NotBusy;
                         data.shortcut_keys.pressed_hot_keys = HashSet::new();
+
+                        let mut convert_code = HashSet::<String>::new();
+                        for code in data.shortcut_keys.favorite_hot_keys.clone() {
+                            convert_code.insert(code.to_string());
+                        }
+
+                        match write_to_file(PATH_FAVORITE_SHORTCUT, &convert_code) {
+                            Ok(_) => data
+                                .alert
+                                .show_alert("Favorite Shortcut saved successfully!"),
+                            Err(_) => data
+                                .alert
+                                .show_alert("Error during writing to the shortcut settings file!"),
+                        }
                     }
                 } else if data.shortcut_keys.pressed_hot_keys == HashSet::from([Code::Escape]) {
                     data.shortcut_keys.pressed_hot_keys = HashSet::new(); // clean map
@@ -195,7 +219,9 @@ impl AppDelegate<AppState> for Delegate {
                             ctx.submit_command(sys_cmd::CLOSE_WINDOW.to(Target::Window(window_id)));
                         }
                     }
-                } else if data.shortcut_keys.pressed_hot_keys == HashSet::from([Code::ControlLeft, Code::KeyW]) {
+                } else if data.shortcut_keys.pressed_hot_keys
+                    == HashSet::from([Code::ControlLeft, Code::KeyW])
+                {
                     data.shortcut_keys.state = StateShortcutKeys::NotBusy; // it has finished its job
 
                     // Keys ctrl + w has been pressed
@@ -336,40 +362,46 @@ fn build_shortcut_keys_widget() -> impl Widget<AppState> {
         .align_horizontal(UnitPoint::CENTER);
 
     let shortcut_keys_not_available = Flex::column()
-        .with_child(Label::new("Reserved Combinations")
-            .with_text_color(Color::RED)
-            .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
-            .with_text_size(19.)
-            .padding(5.)
+        .with_child(
+            Label::new("Reserved Combinations")
+                .with_text_color(Color::RED)
+                .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
+                .with_text_size(19.)
+                .padding(5.),
         )
-        .with_child(Label::new("Ctrl + C: Copy")
-            .with_text_color(Color::BLUE)
-            .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
-            .with_text_size(15.)
-            .padding(5.)
+        .with_child(
+            Label::new("Ctrl + C: Copy")
+                .with_text_color(Color::BLUE)
+                .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
+                .with_text_size(15.)
+                .padding(5.),
         )
-        .with_child(Label::new("Ctrl + W: Close the main window")
-            .with_text_color(Color::BLUE)
-            .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
-            .with_text_size(15.)
-            .padding(5.)
+        .with_child(
+            Label::new("Ctrl + W: Close the main window")
+                .with_text_color(Color::BLUE)
+                .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
+                .with_text_size(15.)
+                .padding(5.),
         )
-        .with_child(Label::new("Esc: Close the subwindow")
-            .with_text_color(Color::BLUE)
-            .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
-            .with_text_size(15.)
-            .padding(5.)
+        .with_child(
+            Label::new("Esc: Close the subwindow")
+                .with_text_color(Color::BLUE)
+                .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
+                .with_text_size(15.)
+                .padding(5.),
         )
-        .with_child(Label::new("Note: The 'Esc' key will be disabled if no images are")
-            .with_text_color(Color::BLUE)
-            .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
-            .with_text_size(10.)
-            .padding(10.)
+        .with_child(
+            Label::new("Note: The 'Esc' key will be disabled if no images are")
+                .with_text_color(Color::BLUE)
+                .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
+                .with_text_size(10.)
+                .padding(10.),
         )
-        .with_child(Label::new("captured, and you can use 'Ctrl + W' to close the subwindow.")
-            .with_text_color(Color::BLUE)
-            .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
-            .with_text_size(10.)
+        .with_child(
+            Label::new("captured, and you can use 'Ctrl + W' to close the subwindow.")
+                .with_text_color(Color::BLUE)
+                .with_font(FontDescriptor::new(FontFamily::MONOSPACE))
+                .with_text_size(10.),
         )
         .padding(10.)
         .border(Color::RED, 0.7)
@@ -430,7 +462,7 @@ fn build_shortcut_keys_widget() -> impl Widget<AppState> {
                         }),
                 )
                 .with_default_spacer()
-                .with_child(shortcut_keys_not_available)
+                .with_child(shortcut_keys_not_available),
         );
     let container_default = Container::new(flex_default)
         .background(Color::WHITE)

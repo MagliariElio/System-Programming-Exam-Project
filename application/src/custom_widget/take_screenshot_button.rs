@@ -8,8 +8,9 @@ use druid::{commands as sys_cmd, theme, Affine, Data, Insets, LinearGradient, Un
 use image::{DynamicImage, ImageFormat};
 use screenshots::{Screen};
 use tracing::{instrument, trace};
+use crate::BASE_PATH_SCREENSHOT;
 use crate::custom_widget::screenshot_image::UPDATE_SCREENSHOT;
-use crate::custom_widget::{UPDATE_BACK_IMG};
+use crate::custom_widget::{UPDATE_BACK_IMG, verify_exists_dir};
 
 pub const SAVE_SCREENSHOT: Selector<(Rect,WindowId,WidgetId,WidgetId,Box<str>,Box<str>,ImageFormat,u64,u8)> = Selector::new("Save the screenshot image, last param: where to save");
 
@@ -289,6 +290,10 @@ fn save_screenshot(rect: &Rect, base_path: Box<str>, file_name: Box<str>, format
     let dyn_img = DynamicImage::from(
         image.clone()
     );
+
+    // it verify if exists the dir before saving the image
+    verify_exists_dir(BASE_PATH_SCREENSHOT);
+
     let path = format!("{}{}.{}", base_path, file_name, format.extensions_str().first().unwrap());
     dyn_img.save_with_format(path.clone(), format).unwrap();
 
